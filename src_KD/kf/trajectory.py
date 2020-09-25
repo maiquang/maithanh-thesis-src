@@ -20,7 +20,7 @@ class trajectory():
         self.H = np.array([[1., 0, 0, 0],
                            [0., 1, 0, 0]])
         self.R = self.r**2 * np.eye(2)
-        self.m0 = np.array([0., 0., 1., -1.]) #.reshape(4,1)
+        self.m0 = np.array([0., 0., 1., -1.]) #.reshape(4,1) 
         self.X = np.zeros(shape=(self.A.shape[0], self.ndat))
         self.Y = np.zeros(shape=(self.H.shape[0], self.ndat))
         self._simulate()
@@ -31,7 +31,7 @@ class trajectory():
         x = self.m0;
         for t in range(self.ndat):
             q = mvn.rvs(cov=self.Q)
-#            print('q:\n', q)
+            # print('q:\n', q)
             x = self.A.dot(x) + q
 #            print('x: \n', x)
             y = self.H.dot(x) + mvn.rvs(cov=self.R)
