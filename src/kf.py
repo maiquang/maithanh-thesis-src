@@ -123,7 +123,7 @@ if __name__ == '__main__':
         m0 = np.array([0., 0., 1., -1.]).reshape(4, 1)
         P0 = np.eye(4)
 
-        #--- Simulace
+        # --- Simulace
         np.random.seed(1234567890)
         steps = 100
         X = np.zeros(shape=(A.shape[0], steps))
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             Y[:, t] = y.flatten()
             Y_clear[:, t] = y_clear.flatten()
 
-        #---- Odhady
+        # ---- Odhady
         kf = KF(A=A, B=None, H=H, R=R, Q=Q)
         for y in Y.T:
             kf.predict()
@@ -150,7 +150,7 @@ if __name__ == '__main__':
 
             log_x = np.array(kf.log_x).T
 
-        #--- vysledky
+        # --- vysledky
         plt.figure(figsize=(10, 10))
         plt.plot(X[0], X[1], '-', label='Trajectory')
         plt.plot(Y[0], Y[1], '.', label='Observations')
