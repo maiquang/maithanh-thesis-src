@@ -12,7 +12,7 @@ class trajectory():
                  init_state,
                  B=None,
                  u=None,
-                 random_state=0,
+                 random_state=None,
                  n=100):
 
         # Simulation parameters
@@ -38,7 +38,8 @@ class trajectory():
         self._simulate()
 
     def _simulate(self):
-        np.random.seed(self.seed)
+        if self.seed is not None:
+            np.random.seed(self.seed)
 
         x = self.x0
         for t in range(self.n):
