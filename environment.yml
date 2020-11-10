@@ -1,0 +1,8 @@
+name: DP
+channels:
+  - defaults
+dependencies:
+  - python
+  - numpy
+  - scipy
+  - seaborn
