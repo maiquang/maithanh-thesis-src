@@ -6,3 +6,4 @@ dependencies:
   - numpy
   - scipy
   - seaborn
+  - nb_conda_kernels
