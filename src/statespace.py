@@ -69,7 +69,7 @@ class CAModel(StateSpace):
         ])
 
         H = np.array([[1, 0, 0, 0, 0, 0],
-                        [0, 1, 0, 0, 0, 0]])
+                      [0, 1, 0, 0, 0, 0]])
         R = r**2 * np.eye(2)
-#   fmt: on
+        # fmt: on
         super().__init__(A, H, Q, R)
