@@ -2,18 +2,10 @@ import numpy as np
 from scipy.stats import multivariate_normal as mvn
 
 
-class trajectory():
-
-    def __init__(self,
-                 A,
-                 H,
-                 Q,
-                 R,
-                 init_state,
-                 B=None,
-                 u=None,
-                 random_state=None,
-                 n=100):
+class trajectory:
+    def __init__(
+        self, A, H, Q, R, init_state, B=None, u=None, random_state=None, n=100
+    ):
 
         # Simulation parameters
         self.n = n
