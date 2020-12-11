@@ -2,9 +2,30 @@ import numpy as np
 
 
 class StateSpace:
-    def __init__(self, A, H, Q, R, B=None):
+    """Discrete time-invariant state-space representation.
+
+    Attributes
+    ----------
+    A : matrix
+        state transition matrix
+    H : matrix
+        measurement matrix
+    Q : matrix
+        process noise covariance matrix
+    R : matrix
+        measurement noise covariance matrix
+    B : matrix
+        input gain matrix
+    u : vector
+        input vector
+    """
+
+    def __init__(self, A, H, Q, R, B=None, u=None):
+        """Initialize custom state-space model representation.
+        """
         self.A = A
         self.B = B
+        self.u = u
         self.Q = Q
 
         self.H = H
@@ -12,64 +33,118 @@ class StateSpace:
 
 
 class RWModel(StateSpace):
-    def __init__(self, q, r, dt=1, ndim=2):
+    """Random Walk Kinematic Model
+    """
+
+    def __init__(self, q, r, ndim=2, dt=1):
+        """Initialize random walk model.
+
+        Parameters
+        ----------
+        q : float
+            process noise intensity
+        r : float
+            measurement noise variance
+        ndim : int
+            number of observed dimensions
+        dt : int
+            sampling period
+        """
         # Random Walk Model
-        # fmt:off
         A = np.eye(ndim)
         Q = q * (dt * np.eye(ndim))
 
         H = np.eye(ndim)
-        R = r**2 + np.eye(ndim)
-        # fmt:on
+        R = (r ** 2) * np.eye(ndim)
         super().__init__(A, H, Q, R)
 
 
 class CVModel(StateSpace):
-    def __init__(self, q, r, dt=1, ndim=2):
+    """Constant Velocity Kinematic Model
+    """
+
+    def __init__(self, q, r, ndim=2, dt=1):
+        """Initialize constant velocity model.
+
+        Parameters
+        ----------
+        q : float
+            process noise intensity
+        r : float
+            measurement noise variance
+        ndim : int
+            number of observed dimensions
+        dt : int
+            sampling period
+        """
         # Constant Velocity Model
-        # fmt:off
-        A = np.array([[1, 0, dt, 0],
-                      [0, 1, 0, dt],
-                      [0, 0, 1,  0],
-                      [0, 0, 0,  1]])
+        A = np.eye(2 * ndim) + dt * np.eye(2 * ndim, k=ndim)
+        # for i in range(ndim):
+        #     A[i, i + ndim] = dt
 
-        Q = q * np.array([[dt**3/3, 0      , dt**2/2, 0      ],
-                          [0,       dt**3/3, 0,       dt**2/2],
-                          [dt**2/2, 0,       dt,      0      ],
-                          [0,       dt**2/2, 0,       dt     ]])
+        Q = np.zeros((2 * ndim, 2 * ndim))
+        for i in range(ndim):
+            Q[i, i] = (dt ** 3) / 3
+            Q[i, i + ndim] = (dt ** 2) / 2
 
-        H = np.array([[1., 0, 0, 0],
-                      [0., 1, 0, 0]])
-        R = r**2 * np.eye(2)
-        # fmt:on
+            Q[i + ndim, i] = (dt ** 2) / 2
+            Q[i + ndim, i + ndim] = dt
+        Q = q * Q
+
+        H = np.eye(ndim, 2 * ndim)
+        R = (r ** 2) * np.eye(ndim)
+
         super().__init__(A, H, Q, R)
 
 
 class CAModel(StateSpace):
-    def __init__(self, q, r, dt=1, ndim=2):
-        # Constant Acceleration Model
-        # fmt:off
-        A = np.array([
-            [1, 0, dt,  0, dt**2/2,       0],
-            [0, 1, 0,  dt,       0, dt**2/2],
-            [0, 0, 1,   0,      dt,       0],
-            [0, 0, 0,   1,       0,      dt],
-            [0, 0, 0,   0,       1,       0],
-            [0, 0, 0,   0,       0,       1]
-        ])
+    """Constant Acceleration Kinematic Model
+    """
 
-        Q = q * np.array([
-            [dt**5/20,        0, dt**4/8,       0, dt**3/6,       0],
-            [       0, dt**5/20,       0, dt**4/8,       0, dt**3/6],
-            [ dt**4/8,        0, dt**3/3,       0, dt**2/2,       0],
-            [       0,  dt**4/8,       0, dt**3/3,       0, dt**2/2],
-            [ dt**3/6,        0, dt**2/2,       0,      dt,       0],
-            [       0,  dt**3/6,       0, dt**2/2,       0,      dt]
+    def __init__(self, q, r, ndim=2, dt=1):
+        """Initialize constant acceleration model.
 
-        ])
+        Parameters
+        ----------
+        q : float
+            process noise intensity
+        r : float
+            measurement noise variance
+        ndim : int
+            number of observed dimensions
+        dt : int
+            sampling period
+        """
+        A = (
+            np.eye(3 * ndim)
+            + dt * np.eye(3 * ndim, k=ndim)
+            + (dt ** 2) / 2 * np.eye(3 * ndim, k=2 * ndim)
+        )
 
-        H = np.array([[1, 0, 0, 0, 0, 0],
-                      [0, 1, 0, 0, 0, 0]])
-        R = r**2 * np.eye(2)
-        # fmt: on
+        Q = np.zeros((3 * ndim, 3 * ndim))
+        for i in range(ndim):
+            Q[i, i] = (dt ** 5) / 20
+            Q[i, i + ndim] = (dt ** 4) / 8
+            Q[i, i + 2 * ndim] = (dt ** 3) / 6
+
+            Q[i + ndim, i] = (dt ** 4) / 8
+            Q[i + ndim, i + ndim] = (dt ** 3) / 3
+            Q[i + ndim, i + 2 * ndim] = (dt ** 2) / 2
+
+            Q[i + 2 * ndim, i] = (dt ** 3) / 6
+            Q[i + 2 * ndim, i + ndim] = (dt ** 2) / 2
+            Q[i + 2 * ndim, i + 2 * ndim] = dt
+        Q = q * Q
+
+        H = np.eye(ndim, 3 * ndim)
+        R = (r ** 2) * np.eye(ndim)
         super().__init__(A, H, Q, R)
+
+
+if __name__ == "__main__":
+    cam = CAModel(q=1, r=2, ndim=2)
+
+    print(cam.A)
+    print(cam.Q)
+    print(cam.H)
+    print(cam.R)
