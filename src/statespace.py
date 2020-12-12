@@ -2,24 +2,39 @@ import numpy as np
 
 
 class StateSpace:
-    """Discrete time-invariant state-space representation.
+    """
+    Discrete time-invariant state-space representation
 
     Attributes
     ----------
-    A : matrix
-        state transition matrix
-    H : matrix
-        measurement matrix
-    Q : matrix
-        process noise covariance matrix
-    R : matrix
-        measurement noise covariance matrix
-    B : matrix
-        input gain matrix
+    A : ndarray
+        State transition matrix
+    H : ndarray
+        Measurement matrix
+    Q : ndarray
+        Process noise covariance matrix
+    R : ndarray
+        Measurement noise covariance matrix
+    B : ndarray
+        Input gain matrix
     """
 
     def __init__(self, A, H, Q, R, B=None):
-        """Initialize custom state-space model representation.
+        """
+        Initialize custom state-space model representation.
+
+        Parameters
+        ----------
+        A : ndarray
+            State transition matrix
+        H : ndarray
+            Measurement matrix
+        Q : ndarray
+            Process noise covariance matrix
+        R : ndarray
+            Measurement noise covariance matrix
+        B : ndarray
+            Input gain matrix
         """
         self.A = A
         self.B = B
@@ -39,13 +54,13 @@ class RWModel(StateSpace):
         Parameters
         ----------
         q : float
-            process noise intensity
+            Process noise intensity
         r : float
-            measurement noise variance
+            Measurement noise variance
         ndim : int
-            number of observed dimensions
+            Number of observed dimensions
         dt : int
-            sampling period
+            Sampling period
         """
         A = np.eye(ndim)
         Q = q * (dt * np.eye(ndim))
@@ -65,13 +80,13 @@ class CVModel(StateSpace):
         Parameters
         ----------
         q : float
-            process noise intensity
+            Process noise intensity
         r : float
-            measurement noise variance
+            Measurement noise variance
         ndim : int
-            number of observed dimensions
+            Number of observed dimensions
         dt : int
-            sampling period
+            Sampling period
         """
         A = np.eye(2 * ndim) + dt * np.eye(2 * ndim, k=ndim)
 
@@ -100,13 +115,13 @@ class CAModel(StateSpace):
         Parameters
         ----------
         q : float
-            process noise intensity
+            Process noise intensity
         r : float
-            measurement noise variance
+            Measurement noise variance
         ndim : int
-            number of observed dimensions
+            Number of observed dimensions
         dt : int
-            sampling period
+            Sampling period
         """
         A = (
             np.eye(3 * ndim)
@@ -135,9 +150,4 @@ class CAModel(StateSpace):
 
 
 if __name__ == "__main__":
-    cam = CAModel(q=1, r=2, ndim=2)
-
-    print(cam.A)
-    print(cam.Q)
-    print(cam.H)
-    print(cam.R)
+    pass
