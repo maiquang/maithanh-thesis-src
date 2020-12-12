@@ -16,16 +16,13 @@ class StateSpace:
         measurement noise covariance matrix
     B : matrix
         input gain matrix
-    u : vector
-        input vector
     """
 
-    def __init__(self, A, H, Q, R, B=None, u=None):
+    def __init__(self, A, H, Q, R, B=None):
         """Initialize custom state-space model representation.
         """
         self.A = A
         self.B = B
-        self.u = u
         self.Q = Q
 
         self.H = H
@@ -50,7 +47,6 @@ class RWModel(StateSpace):
         dt : int
             sampling period
         """
-        # Random Walk Model
         A = np.eye(ndim)
         Q = q * (dt * np.eye(ndim))
 
@@ -77,10 +73,7 @@ class CVModel(StateSpace):
         dt : int
             sampling period
         """
-        # Constant Velocity Model
         A = np.eye(2 * ndim) + dt * np.eye(2 * ndim, k=ndim)
-        # for i in range(ndim):
-        #     A[i, i + ndim] = dt
 
         Q = np.zeros((2 * ndim, 2 * ndim))
         for i in range(ndim):
