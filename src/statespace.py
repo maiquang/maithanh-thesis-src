@@ -10,13 +10,13 @@ class StateSpace:
     A : ndarray
         State transition matrix
     H : ndarray
-        Measurement matrix
+        Observation matrix
     Q : ndarray
         Process noise covariance matrix
     R : ndarray
-        Measurement noise covariance matrix
+        Observation noise covariance matrix
     B : ndarray
-        Input gain matrix
+        Control transition matrix
     """
 
     def __init__(self, A, H, Q, R, B=None):
@@ -28,19 +28,19 @@ class StateSpace:
         A : ndarray
             State transition matrix
         H : ndarray
-            Measurement matrix
+            Observation matrix
         Q : ndarray
             Process noise covariance matrix
         R : ndarray
-            Measurement noise covariance matrix
-        B : ndarray
-            Input gain matrix
+            Observation noise covariance matrix
+        B : ndarray, optional
+            Control transition matrix
         """
         self.A = A
         self.B = B
         self.Q = Q
 
-        self.H = H
+        self.H = np.atleast_2d(H)
         self.R = R
 
 
@@ -56,7 +56,7 @@ class RWModel(StateSpace):
         q : float
             Process noise intensity
         r : float
-            Measurement noise variance
+            Observation noise variance
         ndim : int
             Number of observed dimensions
         dt : int
@@ -82,7 +82,7 @@ class CVModel(StateSpace):
         q : float
             Process noise intensity
         r : float
-            Measurement noise variance
+            Observation noise variance
         ndim : int
             Number of observed dimensions
         dt : int
@@ -117,7 +117,7 @@ class CAModel(StateSpace):
         q : float
             Process noise intensity
         r : float
-            Measurement noise variance
+            Observation noise variance
         ndim : int
             Number of observed dimensions
         dt : int

@@ -11,14 +11,14 @@ class Trajectory:
     ----------
     model : StateSpace object
         State-space representation model
-    init_state : ndarray
-        Initial state at t=0
     n_steps : int
         Number of simulation steps
+    init_state : ndarray, optional
+        Initial state vector at t=0, default is a zero vector
     random_seed : int, optional
         Random seed for PRNG initialization
     u : ndarray, optional
-        Input vector
+        Control vector
 
     Attributes
     ----------
@@ -27,41 +27,44 @@ class Trajectory:
     X : ndarray
         An array of simulated states
     Y : ndarray
-        An array of simulated measurements
+        An array of simulated observations
     """
 
-    def __init__(self, model, init_state, n_steps, random_seed=None, u=None):
+    def __init__(self, model, n_steps, init_state=None, random_seed=None, u=None):
         """Initialize trajectory simulator and simulate n_steps.
         """
         if not isinstance(model, StateSpace):
             raise TypeError(f"StateSpace object expected, got {type(model)}")
 
         self.model = model
-        self.X, self.Y = self.simulate(init_state, n_steps, random_seed, u)
 
-    def simulate(self, init_state, n_steps, random_seed=None, u=None):
+        if init_state is None:
+            init_state = np.zeros(self.model.A.shape[0], dtype=np.float64)
+
+        self.X, self.Y = self.simulate(n_steps, init_state, random_seed, u)
+
+    def simulate(self, n_steps, init_state=None, random_seed=None, u=None):
         """ Simulate trajectory.
 
         Parameters
         ----------
         model : StateSpace object
             State-space representation model
-        init_state : ndarray
-            Initial state at t=0
         n_steps : int
             Number of simulation steps
+        init_state : ndarray, optional
+            Initial state vector at t=0, default is a zero vector
         random_seed : int, optional
             Random seed for PRNG initialization
         u : ndarray, optional
-            Input vector
+            Control vector
 
         Returns
         -------
         X : ndarray
             An array of simulated states
         Y : ndarray
-            An array of simulated measurements
-
+            An array of simulated observations
         """
 
         if random_seed is not None:
@@ -88,7 +91,7 @@ class Trajectory:
         return self.X
 
     @property
-    def measurements(self):
+    def observations(self):
         return self.Y
 
 
