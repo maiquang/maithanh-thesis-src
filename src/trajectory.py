@@ -13,20 +13,20 @@ class Trajectory:
         State-space representation model
     n_steps : int
         Number of simulation steps
-    init_state : ndarray, optional
+    init_state : np.array, optional
         Initial state vector at t=0, default is a zero vector
     random_seed : int, optional
         Random seed for PRNG initialization
-    u : ndarray, optional
+    u : np.array, optional
         Control vector
 
     Attributes
     ----------
     model : StateSpace object
         State-space representation model
-    X : ndarray
+    X : np.array
         An array of simulated states
-    Y : ndarray
+    Y : np.array
         An array of simulated observations
     """
 
@@ -52,18 +52,18 @@ class Trajectory:
             State-space representation model
         n_steps : int
             Number of simulation steps
-        init_state : ndarray, optional
+        init_state : np.array, optional
             Initial state vector at t=0, default is a zero vector
         random_seed : int, optional
             Random seed for PRNG initialization
-        u : ndarray, optional
+        u : np.array, optional
             Control vector
 
         Returns
         -------
-        X : ndarray
+        X : np.array
             An array of simulated states
-        Y : ndarray
+        Y : np.array
             An array of simulated observations
         """
 

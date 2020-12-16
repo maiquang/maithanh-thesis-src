@@ -7,15 +7,15 @@ class StateSpace:
 
     Attributes
     ----------
-    A : ndarray
+    A : np.array
         State transition matrix
-    H : ndarray
+    H : np.array
         Observation matrix
-    Q : ndarray
+    Q : np.array
         Process noise covariance matrix
-    R : ndarray
+    R : np.array
         Observation noise covariance matrix
-    B : ndarray
+    B : np.array
         Control transition matrix
     """
 
@@ -25,15 +25,15 @@ class StateSpace:
 
         Parameters
         ----------
-        A : ndarray
+        A : np.array
             State transition matrix
-        H : ndarray
+        H : np.array
             Observation matrix
-        Q : ndarray
+        Q : np.array
             Process noise covariance matrix
-        R : ndarray
+        R : np.array
             Observation noise covariance matrix
-        B : ndarray, optional
+        B : np.array, optional
             Control transition matrix
         """
         self.A = A
