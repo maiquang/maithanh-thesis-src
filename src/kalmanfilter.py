@@ -37,6 +37,8 @@ class KalmanFilter:
         self._I = np.eye(self.model.A.shape[0])   # for update() method
         self._history = []   # logging
 
+        self._nbh = [self]
+
     def predict(self, u=None, log=False):
         """ Predict the next state using the state-space equation.
 
@@ -94,8 +96,25 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def cov_intersect(self):
-        pass
+    def get_estimate(self):
+        return (self.x, self.P)
+
+    def add_nbhs(self, *kfs):
+        for kf in kfs:
+            self._nbh.append(kf)
+
+    def get_nbh_estimates(self):
+        # ONLY USE ESTIMATES FROM MORE COMPLEX MODELS
+        self._nbh_ests = [n.get_estimate() for n in self._nbh]
+
+    def cov_intersect(self, weights=None, normalize=True):
+        if weights is None:
+            weights = np.ones(shape=len(self._nbh_ests)) / np.sum(weights)
+
+        if normalize is True:
+            weights = np.asarray(weights) / np.sum(weights)
+
+        ###
 
     def _log(self):
         self._history.append(self.x.copy())
