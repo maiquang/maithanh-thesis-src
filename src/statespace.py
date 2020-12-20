@@ -58,7 +58,7 @@ class RWModel(StateSpace):
         r : float
             Observation noise variance
         ndim : int
-            Number of observed dimensions
+            Number of observed position dimensions
         dt : int
             Sampling period
         """
@@ -84,7 +84,7 @@ class CVModel(StateSpace):
         r : float
             Observation noise variance
         ndim : int
-            Number of observed dimensions
+            Number of observed position dimensions
         dt : int
             Sampling period
         """
@@ -119,7 +119,7 @@ class CAModel(StateSpace):
         r : float
             Observation noise variance
         ndim : int
-            Number of observed dimensions
+            Number of observed position dimensions
         dt : int
             Sampling period
         """

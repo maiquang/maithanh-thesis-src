@@ -3,7 +3,7 @@ from .statespace import StateSpace
 
 
 class KalmanFilter:
-    """ Kalman Filter class.
+    """ Kalman Filter class
 
     Parameters
     ----------
@@ -30,12 +30,14 @@ class KalmanFilter:
             raise TypeError(f"StateSpace object expected, got {type(model)}")
         self.model = model
 
-        # Priors
-        self.x = x0 if x0 else np.zeros(self.model.A.shape[0])
-        self.P = P if P else np.eye(self.model.A.shape[0]) * 1000
+        self._ndim = self.model.A.shape[0]
 
-        self._I = np.eye(self.model.A.shape[0])   # for update() method
-        self._history = []   # logging
+        # Priors
+        self.x = x0 if x0 else np.zeros(self._ndim)
+        self.P = P if P else np.eye(self._ndim) * 1000
+
+        self._I = np.eye(self._ndim)  # for update() method
+        self._history = []  # logging
 
         self._nbh = [self]
 
@@ -59,7 +61,7 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def update(self, y, R=None, log=True):
+    def update(self, y, R=None, log=False):
         """ Correct/update the current state estimate
 
         Parameters
@@ -103,18 +105,36 @@ class KalmanFilter:
         for kf in kfs:
             self._nbh.append(kf)
 
-    def get_nbh_estimates(self):
-        # ONLY USE ESTIMATES FROM MORE COMPLEX MODELS
-        self._nbh_ests = [n.get_estimate() for n in self._nbh]
+    def get_nbh_estimates(self, indices=None):
+        # indices - Indices of variables over which to get marginal distributions
+        if not indices:
+            indices = np.arange(self._ndim, dtype=np.int)
 
-    def cov_intersect(self, weights=None, normalize=True):
+        self._nbh_ests = []
+        for n in self._nbh:
+            mu, P = n.get_estimate()
+            self._nbh_ests.append((mu[indices], P[indices, indices]))
+
+    def cov_intersect(self, weights=None, normalize=True, log=True):
         if weights is None:
             weights = np.ones(shape=len(self._nbh_ests)) / np.sum(weights)
 
         if normalize is True:
             weights = np.asarray(weights) / np.sum(weights)
 
-        ###
+        P_newinv = np.zeros_like(self.P)
+        xnew = np.zeros_like(self.x)
+
+        for w, (x, P) in zip(weights, self._nbh_ests):
+            Pinv = np.linalg.inv(P)
+            P_newinv += w * Pinv
+            xnew += w * Pinv.dot(x.T)
+
+        self.P = np.linalg(P_newinv)
+        self.x = self.P.dot(xnew)
+
+        if log:
+            self._log()
 
     def _log(self):
         self._history.append(self.x.copy())
