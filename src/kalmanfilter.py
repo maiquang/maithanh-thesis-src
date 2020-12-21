@@ -111,11 +111,16 @@ class KalmanFilter:
             indices = np.arange(self._ndim, dtype=np.int)
 
         self._nbh_ests = []
-        for n in self._nbh:
-            mu, P = n.get_estimate()
-            self._nbh_ests.append((mu[indices], P[np.ix_(indices, indices)]))
+        for estor in self._nbh:
+            # Only consider more complex models
+            if estor._ndim >= self._ndim:
+                mu, P = estor.get_estimate()
+                self._nbh_ests.append((mu[indices], P[np.ix_(indices, indices)]))
 
     def cov_intersect(self, weights=None, normalize=True, log=True):
+        if len(self._nbh_ests) < 2:
+            return
+
         if weights is None:
             weights = np.ones(shape=len(self._nbh_ests))
             weights /= np.sum(weights)
