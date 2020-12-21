@@ -113,11 +113,12 @@ class KalmanFilter:
         self._nbh_ests = []
         for n in self._nbh:
             mu, P = n.get_estimate()
-            self._nbh_ests.append((mu[indices], P[indices, indices]))
+            self._nbh_ests.append((mu[indices], P[np.ix_(indices, indices)]))
 
     def cov_intersect(self, weights=None, normalize=True, log=True):
         if weights is None:
-            weights = np.ones(shape=len(self._nbh_ests)) / np.sum(weights)
+            weights = np.ones(shape=len(self._nbh_ests))
+            weights /= np.sum(weights)
 
         if normalize is True:
             weights = np.asarray(weights) / np.sum(weights)
@@ -130,7 +131,7 @@ class KalmanFilter:
             P_newinv += w * Pinv
             xnew += w * Pinv.dot(x.T)
 
-        self.P = np.linalg(P_newinv)
+        self.P = np.linalg.inv(P_newinv)
         self.x = self.P.dot(xnew)
 
         if log:
