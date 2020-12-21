@@ -15,6 +15,11 @@ class KalmanFilter:
         Prior state covariance matrix
     Attributes
     ----------
+    model : StateSpace object
+        State-space representation model
+    nbh : list of references to KalmanFilter objects
+        Agents in the neighborhood of the this agent, includes this agent
+        at the first position
     x : np.array
         Current state estimate
     P : np.array
@@ -29,6 +34,7 @@ class KalmanFilter:
         if not isinstance(model, StateSpace):
             raise TypeError(f"StateSpace object expected, got {type(model)}")
         self.model = model
+        self.nbh = [self]
 
         self._ndim = self.model.A.shape[0]
 
@@ -38,8 +44,6 @@ class KalmanFilter:
 
         self._I = np.eye(self._ndim)  # for update() method
         self._history = []  # logging
-
-        self._nbh = [self]
 
     def predict(self, u=None, log=False):
         """ Predict the next state using the state-space equation.
@@ -98,24 +102,45 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def get_estimate(self):
-        return (self.x, self.P)
+    def get_estimate(self, indices=None):
+        """ Return current state estimate.
+
+        Parameters
+        ----------
+        indices : list-like, optional
+            Indices of variables over which to get marginal distributions
+
+        Returns
+        -------
+        (x, P) : (np.array, np.array)
+            Current state estimate x and covariance matrix P
+        """
+        if not indices:
+            indices = np.arange(self._ndim, dtype=np.int)
+
+        return (self.x[indices], self.P[np.ix_(indices, indices)])
 
     def add_nbhs(self, *kfs):
+        """ Add agents to this agent's neighborhood.
+
+        Parameters
+        ----------
+        *kfs : KalmanFilter objects
+            One or more agents to add to this agent's neighborhood
+        """
         for kf in kfs:
-            self._nbh.append(kf)
+            self.nbh.append(kf)
 
     def get_nbh_estimates(self, indices=None):
         # indices - Indices of variables over which to get marginal distributions
         if not indices:
             indices = np.arange(self._ndim, dtype=np.int)
 
-        self._nbh_ests = []
-        for estor in self._nbh:
-            # Only consider more complex models
+        self.nbh_ests = []
+        for estor in self.nbh:
+            # Only consider estimates from more complex models
             if estor._ndim >= self._ndim:
-                mu, P = estor.get_estimate()
-                self._nbh_ests.append((mu[indices], P[np.ix_(indices, indices)]))
+                self._nbh_ests.append(estor.get_estimate())
 
     def cov_intersect(self, weights=None, normalize=True, log=True):
         if len(self._nbh_ests) < 2:
