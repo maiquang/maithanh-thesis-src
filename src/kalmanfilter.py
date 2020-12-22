@@ -13,6 +13,7 @@ class KalmanFilter:
         Prior state estimate
     P : np.array, optional
         Prior state covariance matrix
+
     Attributes
     ----------
     model : StateSpace object
@@ -26,6 +27,21 @@ class KalmanFilter:
         Current state covariance matrix
     history : np.array
         History of state estimates
+
+    Methods
+    -------
+    predict(u=None, log=False)
+        Predict the next state using the state-space equation.
+    update(y, R=None, log=False)
+        Correct/update the current state estimate.
+    get_estimate(indices=None)
+        Get current state estimate.
+    add_nbhs(*kfs)
+        Add agents to this agent's neighborhood.
+    get_nbh_estimates(indices=None)
+        Get estimates from agents in neighborhood.
+    cov_intersect(weights=None, normalize=True, log=True)
+        Calculate combined estimate from neighborhood agents' estimates.
     """
 
     def __init__(self, model, x0=None, P=None):
@@ -66,7 +82,7 @@ class KalmanFilter:
             self._log()
 
     def update(self, y, R=None, log=False):
-        """ Correct/update the current state estimate
+        """ Correct/update the current state estimate.
 
         Parameters
         ----------
@@ -86,7 +102,7 @@ class KalmanFilter:
         K = np.linalg.inv(H.dot(PHT) + R)
         K = PHT.dot(K)
 
-        # x+ = x- + K(y - Hx-)
+        # x+ = x-  +K(y - Hx-)
         innov = y - H.dot(self.x)
         xplus = self.x + K.dot(innov)
 
@@ -103,7 +119,7 @@ class KalmanFilter:
             self._log()
 
     def get_estimate(self, indices=None):
-        """ Return current state estimate.
+        """ Get current state estimate.
 
         Parameters
         ----------
@@ -115,7 +131,7 @@ class KalmanFilter:
         (x, P) : (np.array, np.array)
             Current state estimate x and covariance matrix P
         """
-        if not indices:
+        if indices is None:
             indices = np.arange(self._ndim, dtype=np.int)
 
         return (self.x[indices], self.P[np.ix_(indices, indices)])
@@ -132,17 +148,48 @@ class KalmanFilter:
             self.nbh.append(kf)
 
     def get_nbh_estimates(self, indices=None):
-        # indices - Indices of variables over which to get marginal distributions
-        if not indices:
-            indices = np.arange(self._ndim, dtype=np.int)
+        """ Get estimates from agents in neighborhood. This function should be
+        called after predict() and update() but before cov_intersect().
 
-        self.nbh_ests = []
-        for estor in self.nbh:
+        Parameters
+        ----------
+        indices : list-of-lists/arrays, optional
+            A list, the size of neighborhood, of indices of variables over
+            which to get marginal distributions for each agent in neighborhood
+
+            Selects ndim first variables by default, ndim is the dimension of
+            this agent's estimate
+        """
+        if not indices:
+            # Default case
+            indices = [None for i in range(len(self.nbh))]
+
+        self._nbh_ests = []
+        for agent, i in zip(self.nbh, indices):
             # Only consider estimates from more complex models
-            if estor._ndim >= self._ndim:
-                self._nbh_ests.append(estor.get_estimate())
+            if agent._ndim >= self._ndim:
+                # Default case if i is None
+                self._nbh_ests.append(
+                    agent.get_estimate(
+                        indices=np.arange(self._ndim, dtype=np.int) if not i else i
+                    )
+                )
 
     def cov_intersect(self, weights=None, normalize=True, log=True):
+        """ Calculate combined estimate from neighborhood agents' estimates
+        using the covariance intersection algorithm. Updated neighborhood
+        estimates should be obtained by calling get_nbh_estimates()
+        before each cov_intersect() call.
+
+        Parameters
+        ----------
+        weights : list-like
+            Weights for each agent in the neighborhood
+        normalize : bool, optional, default True
+            Normalize weights
+        log : bool, default True
+            Log the resulting state estimate
+        """
         if len(self._nbh_ests) < 2:
             return
 

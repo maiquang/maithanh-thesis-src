@@ -28,6 +28,11 @@ class Trajectory:
         An array of simulated states
     Y : np.array
         An array of simulated observations
+
+    Methods
+    -------
+    simulate(n_steps, init_state=None, random_seed=None, u=None)
+        Simulate trajectory.
     """
 
     def __init__(self, model, n_steps, init_state=None, random_seed=None, u=None):
