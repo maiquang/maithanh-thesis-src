@@ -54,13 +54,13 @@ class KalmanFilter:
 
         self._ndim = self.model.A.shape[0]
 
-        # Save priors in case a reset is needed
-        self.x0 = x0 if x0 else np.zeros(self._ndim)
-        self.P0 = P0 if P0 else np.eye(self._ndim) * 1000
-
-        # Priors
+        # Initialize current estimates with priors
         self.x = x0 if x0 else np.zeros(self._ndim)
         self.P = P0 if P0 else np.eye(self._ndim) * 1000
+
+        # Save priors in case a reset is needed
+        self._x0 = x0 if x0 else np.zeros(self._ndim)
+        self._P0 = P0 if P0 else np.eye(self._ndim) * 1000
 
         self._I = np.eye(self._ndim)  # for update() method
         self._history = []  # logging
@@ -181,9 +181,9 @@ class KalmanFilter:
 
         self._nbh_ests = []
         for agent, i in zip(self.nbh, indices):
-            # Only consider estimates from more complex models
+            # Only consider estimates from models with same/higher complexity
             if agent._ndim >= self._ndim:
-                # Default case if i is None
+                # i is usually None -> marginalize first n variables
                 self._nbh_ests.append(
                     agent.get_estimate(
                         indices=np.arange(self._ndim, dtype=np.int) if not i else i
@@ -229,13 +229,15 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def reset_filter(self, dist_thresh=None):
+    def reset_filter(self, dist_thresh=None, init_state=None, init_cov=None):
         """
         """
-        # Compute mean pos. estimate
-        # Reset
-        # Init with default state or custom default state
-        pass
+        # Add to get_nbh_estimates function
+        ctr = np.mean(self._nbh_ests[1:])
+        distance_from_ctr = np.linalg.norm(ctr - self.x)
+        if distance_from_ctr >= dist_thresh:
+            self.x = init_state if init_state else self._x0
+            self.P = init_cov if init_cov else self._P0
 
     def _log(self):
         self._history.append(self.x.copy())
