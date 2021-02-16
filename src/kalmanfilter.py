@@ -44,7 +44,7 @@ class KalmanFilter:
         Calculate combined estimate from neighborhood agents' estimates.
     """
 
-    def __init__(self, model, x0=None, P=None):
+    def __init__(self, model, x0=None, P0=None):
         """ Initialize Kalman Filter.
         """
         if not isinstance(model, StateSpace):
@@ -54,9 +54,13 @@ class KalmanFilter:
 
         self._ndim = self.model.A.shape[0]
 
+        # Save priors in case a reset is needed
+        self.x0 = x0 if x0 else np.zeros(self._ndim)
+        self.P0 = P0 if P0 else np.eye(self._ndim) * 1000
+
         # Priors
         self.x = x0 if x0 else np.zeros(self._ndim)
-        self.P = P if P else np.eye(self._ndim) * 1000
+        self.P = P0 if P0 else np.eye(self._ndim) * 1000
 
         self._I = np.eye(self._ndim)  # for update() method
         self._history = []  # logging
@@ -224,6 +228,14 @@ class KalmanFilter:
 
         if log:
             self._log()
+
+    def reset_filter(self, dist_thresh=None):
+        """
+        """
+        # Compute mean pos. estimate
+        # Reset
+        # Init with default state or custom default state
+        pass
 
     def _log(self):
         self._history.append(self.x.copy())
