@@ -162,12 +162,15 @@ class KalmanFilter:
         for kf in kfs:
             self.nbh.append(kf)
 
-    def get_nbh_estimates(self, indices=None):
+    def get_nbh_estimates(self, reset_thresh=None, indices=None):
         """ Get estimates from agents in neighborhood. This function should be
         called after predict() and update() but before cov_intersect().
 
         Parameters
         ----------
+        reset_thresh : float, optional
+            Maximum accepted distance from the centroid before the filter reset
+            If None then filter is never reset
         indices : list-of-lists/arrays, optional
             A list, the size of neighborhood, of indices of variables over
             which to get marginal distributions for each agent in neighborhood
@@ -183,12 +186,15 @@ class KalmanFilter:
         for agent, i in zip(self.nbh, indices):
             # Only consider estimates from models with same/higher complexity
             if agent._ndim >= self._ndim:
-                # i is usually None -> marginalize first n variables
+                # i is usually None -> select first _ndim variables
                 self._nbh_ests.append(
                     agent.get_estimate(
                         indices=np.arange(self._ndim, dtype=np.int) if not i else i
                     )
                 )
+
+        if reset_thresh is not None:
+            self.reset_filter(reset_thresh)
 
     def cov_intersect(self, weights=None, normalize=True, log=True):
         """ Calculate combined estimate from neighborhood agents' estimates
@@ -229,15 +235,36 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def reset_filter(self, dist_thresh=None, init_state=None, init_cov=None):
+    def reset_filter(self, reset_thresh, init_state=None, init_cov=None):
+        """ Reset filter if Euclidean distance from the centroid
+        is larger than reset_thresh.
+
+        Centroid is calculated as the arithmetic mean of
+        neighborhood estimates (self excluded).
+
+        Parameters
+        ----------
+        reset_thresh : float
+            Maximum accepted distance from the centroid
+        init_state : np.array, optional
+            State estimate after reset, by default it is the centroid
+        init_cov : np.array, optional
+            State covariance matrix after reset
         """
-        """
-        # Add to get_nbh_estimates function
-        ctr = np.mean(self._nbh_ests[1:])
-        distance_from_ctr = np.linalg.norm(ctr - self.x)
-        if distance_from_ctr >= dist_thresh:
-            self.x = init_state if init_state else self._x0
+        if not isinstance(reset_thresh, (float, int)):
+            raise TypeError(f"Number expected, got {type(reset_thresh)}")
+
+        if len(self._nbh_ests) < 3:
+            return
+
+        ctr = np.asarray([x for (x, P) in self._nbh_ests[1:]]).mean(axis=0)
+        dist_from_ctr = np.linalg.norm(ctr - self.x)
+        if dist_from_ctr >= reset_thresh:
+            # self.x = init_state if init_state else self._x0
+            self.x = init_state if init_state else ctr
             self.P = init_cov if init_cov else self._P0
+
+            self._nbh_ests[0] = self.get_estimate()
 
     def _log(self):
         self._history.append(self.x.copy())
