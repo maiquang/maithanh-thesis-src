@@ -25,25 +25,7 @@ class KFNet:
 
         # degrees = [d for g, d in self.G.degree]
         # print(sum(degrees) / nodes)
-
-        if init is not None:
-            if isinstance(init, dict):
-                if len(init) > self.G.order():
-                    print("[KFNet] Warning: size of init is more than number of nodes")
-                # dict init
-                for idx, kf in init.items():
-                    self.G.nodes[idx]["kf"] = kf
-            elif isinstance(init, list):
-                if len(init) > self.G.order():
-                    print("[KFNet] Warning: size of init is more than number of nodes")
-                # list init
-                n = self.G.order() if self.G.order() <= len(init) else len(init)
-                for idx in range(n):
-                    self.G.nodes[idx]["kf"] = init[idx]
-
-            else:
-                raise TypeError(f"init must be a list or a dict, got {type(init)}.")
-
+        self.assign(init, txt_labels)
         print(self.G.nodes.data())
         # txt-labels init
 
@@ -54,6 +36,48 @@ class KFNet:
         # TODO access using []
         # TODO batch init using dict/list
         # TODO maybe custom topologies constructed using networkx
+
+    def assign(self, init=None, txt_labels=None):
+        # TODO Check if inputs are KF objects?
+        if init is not None:
+            if isinstance(init, dict):
+                if len(init) > self.G.order():
+                    print("[KFNet] Warning: size of init is more than number of nodes")
+                # Dict initilization
+                for idx, kf in init.items():
+                    self.G.nodes[idx]["kf"] = kf
+            elif isinstance(init, list):
+                if len(init) > self.G.order():
+                    print("[KFNet] Warning: size of init is more than number of nodes")
+                # List initialization
+                n = self.G.order() if self.G.order() <= len(init) else len(init)
+                for idx in range(n):
+                    self.G.nodes[idx]["kf"] = init[idx]
+            else:
+                raise TypeError(f"init must be a list or a dict, got {type(init)}.")
+
+        if txt_labels is not None:
+            if isinstance(txt_labels, dict):
+                if len(txt_labels) > self.G.order():
+                    print("[KFNet] Warning: size of txt_labels is more than number of nodes")
+                # Dict initilization
+                for idx, label in txt_labels.items():
+                    self.G.nodes[idx]["txt_label"] = label
+            elif isinstance(txt_labels, list):
+                if len(txt_labels) > self.G.order():
+                    print("[KFNet] Warning: size of txt_labels is more than number of nodes")
+                # List initialization
+                n = (
+                    self.G.order()
+                    if self.G.order() <= len(txt_labels)
+                    else len(txt_labels)
+                )
+                for idx in range(n):
+                    self.G.nodes[idx]["txt_label"] = txt_labels[idx]
+            else:
+                raise TypeError(
+                    f"init must be a list or a dict, got {type(txt_labels)}."
+                )
 
     def draw_network(self, labels="txt"):
         nx.draw_circular(self.G, with_labels=True)

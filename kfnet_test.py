@@ -22,5 +22,5 @@ if __name__ == "__main__":
 
     kfs_dict = {idx: kf for idx, kf in enumerate(kfs)}
 
-    kfn = KFNet(3, 2, init=kfs)
+    kfn = KFNet(3, 2, init=kfs_dict)
     kfn.draw_network()
