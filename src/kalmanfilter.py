@@ -13,6 +13,8 @@ class KalmanFilter:
         Prior state estimate
     P : np.array, optional
         Prior state covariance matrix
+    lambda_expf : float, optional
+        Exponential forgetting parameter, should be from the interval (0, 1)
 
     Attributes
     ----------
@@ -44,13 +46,31 @@ class KalmanFilter:
         Calculate combined estimate from neighborhood agents' estimates.
     """
 
-    def __init__(self, model, x0=None, P0=None):
+    def __init__(self, model, x0=None, P0=None, lambda_expf=None):
         """ Initialize Kalman Filter.
+
+        Parameters
+        ----------
+        model : StateSpace object
+            State-space representation model
+        x0 : np.array, optional
+            Prior state estimate
+        P : np.array, optional
+            Prior state covariance matrix
+        lambda_expf : float, optional
+            Exponential forgetting parameter, should be from the interval (0, 1)
         """
         if not isinstance(model, StateSpace):
             raise TypeError(f"StateSpace object expected, got {type(model)}")
+
+        if lambda_expf is not None and (not (0 < lambda_expf < 1)):
+            raise ValueError(
+                f"Exponential forgetting parameter lamba_expf is not from the interval (0, 1)."
+            )
+
         self.model = model
         self.nbh = [self]
+        self.lambda_expf = lambda_expf
 
         self._ndim = self.model.A.shape[0]
 
@@ -65,15 +85,13 @@ class KalmanFilter:
         self._I = np.eye(self._ndim)  # for update() method
         self._history = []  # logging
 
-    def predict(self, u=None, lambda_expf=None, log=False):
+    def predict(self, u=None, log=False):
         """ Predict the next state using the state-space equation.
 
         Parameters
         ----------
         u : np.array, optional
             Control vector
-        lambda_expf : float, optional
-            Exponential forgetting parameter, should be from the interval (0, 1)
         log : bool, default True
             Log the resulting state estimate
         """
@@ -81,13 +99,9 @@ class KalmanFilter:
         if u is not None:
             xminus += self.model.B.dot(u)
 
-        if lambda_expf is not None:
-            if 0 < lambda_expf < 1:
-                self.P *= 1 / lambda_expf
-            else:
-                raise ValueError(
-                    f"Exponential forgetting parameter lamba_expf is not from the interval (0, 1)."
-                )
+        if self.lambda_expf is not None:
+            self.P *= 1 / self.lambda_expf
+
         Pminus = self.model.A.dot(self.P).dot(self.model.A.T) + self.model.Q
 
         self.x = xminus

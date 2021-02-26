@@ -37,6 +37,19 @@ class Trajectory:
 
     def __init__(self, model, n_steps, init_state=None, random_seed=None, u=None):
         """Initialize trajectory simulator and simulate n_steps.
+
+        Parameters
+        ----------
+        model : StateSpace object
+            State-space representation model
+        n_steps : int
+            Number of simulation steps
+        init_state : np.array, optional
+            Initial state vector at t=0, default is a zero vector
+        random_seed : int, optional
+            Random seed for PRNG initialization
+        u : np.array, optional
+            Control vector
         """
         if not isinstance(model, StateSpace):
             raise TypeError(f"StateSpace object expected, got {type(model)}")
@@ -98,7 +111,3 @@ class Trajectory:
     @property
     def observations(self):
         return self.Y
-
-
-if __name__ == "__main__":
-    pass

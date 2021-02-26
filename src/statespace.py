@@ -5,6 +5,19 @@ class StateSpace:
     """
     Discrete time-invariant state-space representation
 
+        Parameters
+    ----------
+    A : np.array
+        State transition matrix
+    H : np.array
+        Observation matrix
+    Q : np.array
+        Process noise covariance matrix
+    R : np.array
+        Observation noise covariance matrix
+    B : np.array, optional
+        Control transition matrix
+
     Attributes
     ----------
     A : np.array
@@ -46,6 +59,17 @@ class StateSpace:
 
 class RWModel(StateSpace):
     """Random Walk Kinematic Model
+
+    Parameters
+    ----------
+    q : float
+        Process noise intensity
+    r : float
+        Observation noise variance
+    ndim : int
+        Number of observed position dimensions
+    dt : int
+        Sampling period
     """
 
     def __init__(self, q, r, ndim=2, dt=1):
@@ -72,6 +96,17 @@ class RWModel(StateSpace):
 
 class CVModel(StateSpace):
     """Constant Velocity Kinematic Model
+
+    Parameters
+    ----------
+    q : float
+        Process noise intensity
+    r : float
+        Observation noise variance
+    ndim : int
+        Number of observed position dimensions
+    dt : int
+        Sampling period
     """
 
     def __init__(self, q, r, ndim=2, dt=1):
@@ -107,6 +142,17 @@ class CVModel(StateSpace):
 
 class CAModel(StateSpace):
     """Constant Acceleration Kinematic Model
+
+    Parameters
+    ----------
+    q : float
+        Process noise intensity
+    r : float
+        Observation noise variance
+    ndim : int
+        Number of observed position dimensions
+    dt : int
+        Sampling period
     """
 
     def __init__(self, q, r, ndim=2, dt=1):
@@ -147,7 +193,3 @@ class CAModel(StateSpace):
         H = np.eye(ndim, 3 * ndim)
         R = (r ** 2) * np.eye(ndim)
         super().__init__(A, H, Q, R)
-
-
-if __name__ == "__main__":
-    pass
