@@ -59,13 +59,17 @@ class KFNet:
         if txt_labels is not None:
             if isinstance(txt_labels, dict):
                 if len(txt_labels) > self.G.order():
-                    print("[KFNet] Warning: size of txt_labels is more than number of nodes")
+                    print(
+                        "[KFNet] Warning: size of txt_labels is more than number of nodes"
+                    )
                 # Dict initilization
                 for idx, label in txt_labels.items():
                     self.G.nodes[idx]["txt_label"] = label
             elif isinstance(txt_labels, list):
                 if len(txt_labels) > self.G.order():
-                    print("[KFNet] Warning: size of txt_labels is more than number of nodes")
+                    print(
+                        "[KFNet] Warning: size of txt_labels is more than number of nodes"
+                    )
                 # List initialization
                 n = (
                     self.G.order()
@@ -79,14 +83,45 @@ class KFNet:
                     f"init must be a list or a dict, got {type(txt_labels)}."
                 )
 
-    def draw_network(self, labels="txt"):
-        nx.draw_circular(self.G, with_labels=True)
+    def draw_network(self, node_size=1000):
+        pos = nx.circular_layout(self.G)
 
-        # TODO draw with idx labels
-        # TODO draw with txt labels
-        # TODO draw with
-        # TODO assigned nodes with different color
+        in_nodes = []
+        out_nodes = []
+        node_labels = {}
+        for node, attrs in self.G.nodes.data():
+            if ("kf" in attrs) and (attrs["kf"] is not None):
+                in_nodes.append(node)
+            else:
+                out_nodes.append(node)
 
+            node_lbl = str(node)
+            if ("txt_label" in attrs) and (attrs["txt_label"] is not None):
+                node_lbl += ":" + attrs["txt_label"]
+            node_labels[node] = node_lbl
+
+        nx.draw_networkx_nodes(
+            self.G,
+            pos=pos,
+            nodelist=in_nodes,
+            node_size=node_size,
+            node_color="b",
+            label="Initialized",
+        )
+        nx.draw_networkx_nodes(
+            self.G,
+            pos=pos,
+            nodelist=out_nodes,
+            node_size=node_size,
+            node_color="r",
+            label="Uninitialized",
+        )
+        nx.draw_networkx_labels(self.G, pos=pos, labels=node_labels, font_size=12)
+        nx.draw_networkx_edges(self.G, pos=pos, alpha=0.6)
+
+        plt.axis("off")
+        plt.tight_layout()
+        plt.legend(scatterpoints=1)
         plt.show()
 
     # kfn.predict()

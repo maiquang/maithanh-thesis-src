@@ -1,4 +1,4 @@
-from src.statespace import *
+from src.statespace import RWModel, CVModel, CAModel
 from src.kalmanfilter import KalmanFilter
 from src.kfnet import KFNet
 
@@ -21,6 +21,7 @@ if __name__ == "__main__":
     ]
 
     kfs_dict = {idx: kf for idx, kf in enumerate(kfs)}
+    txt_lbls = ["RWM_1", "CVM_1", "CAM_1"]
 
-    kfn = KFNet(3, 2, init=kfs_dict)
+    kfn = KFNet(20, 10, init=kfs_dict, txt_labels=txt_lbls)
     kfn.draw_network()

@@ -3,6 +3,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=jupyternotebooks,vscode,python
 
 archive
+tempCodeRunnerFile.py
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
