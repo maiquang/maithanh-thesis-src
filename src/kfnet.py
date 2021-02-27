@@ -1,8 +1,10 @@
 import copy
 import networkx as nx
+import numpy as np
 from matplotlib import pyplot as plt
 
-# from kalmanfilter import KalmanFilter
+from .kalmanfilter import KalmanFilter
+
 # from statespace import *
 
 
@@ -15,9 +17,12 @@ class KFNet:
         self, nodes=15, avg_deg=10, init=None, txt_labels=None, random_seed=None, G=None
     ):
         if G is None:
-            self.G = nx.expected_degree_graph(
-                w=[avg_deg for _ in range(nodes)], seed=random_seed, selfloops=False
-            )
+            while True:
+                self.G = nx.expected_degree_graph(
+                    w=[avg_deg for _ in range(nodes)], seed=random_seed, selfloops=False
+                )
+                if nx.is_connected(self.G):
+                    break
         else:
             if not isinstance(G, nx.Graph):
                 raise TypeError(f"G must be a networkX.Graph object, got {type(G)}.")
@@ -26,8 +31,6 @@ class KFNet:
         # degrees = [d for g, d in self.G.degree]
         # print(sum(degrees) / nodes)
         self.assign(init, txt_labels)
-        print(self.G.nodes.data())
-        # txt-labels init
 
         # TODO init using dict {int: model}
         # TODO init using list/array
@@ -40,36 +43,30 @@ class KFNet:
     def assign(self, init=None, txt_labels=None):
         # TODO Check if inputs are KF objects?
         if init is not None:
-            if isinstance(init, dict):
+            try:
                 if len(init) > self.G.order():
                     print("[KFNet] Warning: size of init is more than number of nodes")
                 # Dict initilization
                 for idx, kf in init.items():
                     self.G.nodes[idx]["kf"] = kf
-            elif isinstance(init, list):
-                if len(init) > self.G.order():
-                    print("[KFNet] Warning: size of init is more than number of nodes")
+            except AttributeError:
                 # List initialization
                 n = self.G.order() if self.G.order() <= len(init) else len(init)
                 for idx in range(n):
                     self.G.nodes[idx]["kf"] = init[idx]
-            else:
+            except:
                 raise TypeError(f"init must be a list or a dict, got {type(init)}.")
 
         if txt_labels is not None:
-            if isinstance(txt_labels, dict):
+            try:
                 if len(txt_labels) > self.G.order():
                     print(
                         "[KFNet] Warning: size of txt_labels is more than number of nodes"
                     )
                 # Dict initilization
-                for idx, label in txt_labels.items():
-                    self.G.nodes[idx]["txt_label"] = label
-            elif isinstance(txt_labels, list):
-                if len(txt_labels) > self.G.order():
-                    print(
-                        "[KFNet] Warning: size of txt_labels is more than number of nodes"
-                    )
+                for idx, kf in txt_labels.items():
+                    self.G.nodes[idx]["txt_label"] = kf
+            except AttributeError:
                 # List initialization
                 n = (
                     self.G.order()
@@ -78,18 +75,32 @@ class KFNet:
                 )
                 for idx in range(n):
                     self.G.nodes[idx]["txt_label"] = txt_labels[idx]
-            else:
+            except:
                 raise TypeError(
-                    f"init must be a list or a dict, got {type(txt_labels)}."
+                    f"txt_labels must be a list or a dict, got {type(txt_labels)}."
                 )
 
-    def draw_network(self, node_size=1000):
-        pos = nx.circular_layout(self.G)
+    def __getitem__(self, key):
+        return self.G.nodes[key]["kf"]
 
+    def __setitem__(self, key, val):
+        try:
+            # val = (kf, label)
+            self.G.nodes[key]["kf"] = val[0]
+            self.G.nodes[key]["txt_label"] = val[1]
+        except:
+            # val = kf
+            self.G.nodes[key]["kf"] = val
+
+    def __iter__(self):
+        # Iterate through assigned nodes
+        return (kf for _, kf in self.G.nodes(data="kf") if kf is not None)
+
+    def draw_network(self, node_size=1000):
         in_nodes = []
         out_nodes = []
         node_labels = {}
-        for node, attrs in self.G.nodes.data():
+        for node, attrs in self.G.nodes(data=True):
             if ("kf" in attrs) and (attrs["kf"] is not None):
                 in_nodes.append(node)
             else:
@@ -100,6 +111,7 @@ class KFNet:
                 node_lbl += ":" + attrs["txt_label"]
             node_labels[node] = node_lbl
 
+        pos = nx.circular_layout(self.G)
         nx.draw_networkx_nodes(
             self.G,
             pos=pos,
