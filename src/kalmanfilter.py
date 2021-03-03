@@ -78,6 +78,8 @@ class KalmanFilter:
         self.x = x0 if x0 else np.zeros(self._ndim)
         self.P = P0 if P0 else np.eye(self._ndim) * 1000
 
+        self.y = None  # latest observation
+
         # Save priors in case a reset is needed
         self._x0 = x0 if x0 else np.zeros(self._ndim)
         self._P0 = P0 if P0 else np.eye(self._ndim) * 1000
@@ -210,7 +212,7 @@ class KalmanFilter:
         if reset_thresh is not None:
             self.reset_filter(reset_thresh)
 
-    def cov_intersect(self, weights=None, normalize=True, log=True):
+    def cov_intersect(self, weights=None, normalize=True, log=False):
         """ Calculate combined estimate from neighborhood agents' estimates
         using the covariance intersection algorithm. Updated neighborhood
         estimates should be obtained by calling get_nbh_estimates()

@@ -24,5 +24,7 @@ if __name__ == "__main__":
     kfs_dict = {idx: kf for idx, kf in enumerate(kfs)}
     labels = ["RWM_1", "CVM_1", "CAM_1"]
 
-    kfn = KFNet(3, 2, init=kfs, txt_labels=labels)
+    kfn = KFNet(5, 3, init=kfs_dict, txt_labels=labels)
+
+    kfn.print_topology()
     kfn.draw_network()

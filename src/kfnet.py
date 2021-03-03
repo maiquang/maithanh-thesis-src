@@ -28,6 +28,8 @@ class KFNet:
                 raise TypeError(f"G must be a networkX.Graph object, got {type(G)}.")
             self.G = copy.deepcopy(G)
 
+        # To keep track of initialized nodes
+        self._node_set = set()
         # degrees = [d for g, d in self.G.degree]
         # print(sum(degrees) / nodes)
         self.assign(init, txt_labels)
@@ -49,11 +51,17 @@ class KFNet:
                 # Dict initilization
                 for idx, kf in init.items():
                     self.G.nodes[idx]["kf"] = kf
+                    self.G.nodes[idx]["nbhood"] = [kf]
+                self._node_set.update(init.keys())
             except AttributeError:
                 # List initialization
                 n = self.G.order() if self.G.order() <= len(init) else len(init)
                 for idx in range(n):
                     self.G.nodes[idx]["kf"] = init[idx]
+                    self.G.nodes[idx]["nbhood"] = [init[idx]]
+                self._node_set.update(range(n))
+            except KeyError:
+                pass  # Node not in G could be fine
             except:
                 raise TypeError(f"init must be a list or a dict, got {type(init)}.")
 
@@ -80,6 +88,9 @@ class KFNet:
                     f"txt_labels must be a list or a dict, got {type(txt_labels)}."
                 )
 
+        if self._is_fully_init():
+            self._init_nbhood()
+
     def __getitem__(self, key):
         return self.G.nodes[key]["kf"]
 
@@ -87,16 +98,22 @@ class KFNet:
         try:
             # val = (kf, label)
             self.G.nodes[key]["kf"] = val[0]
+            self.G.nodes[key]["nbhood"] = val[0]
             self.G.nodes[key]["txt_label"] = val[1]
         except:
             # val = kf
             self.G.nodes[key]["kf"] = val
+            self.G.nodes[key]["nbhood"] = val
+        self._node_set.add(key)
+
+        if self._is_fully_init():
+            self._init_nbhood()
 
     def __iter__(self):
         # Iterate through assigned nodes
         return (kf for _, kf in self.G.nodes(data="kf") if kf is not None)
 
-    def draw_network(self, node_size=1000):
+    def draw_network(self, node_size=1000, figsize=(10, 7)):
         in_nodes = []
         out_nodes = []
         node_labels = {}
@@ -111,7 +128,9 @@ class KFNet:
                 node_lbl += ":" + attrs["txt_label"]
             node_labels[node] = node_lbl
 
-        pos = nx.circular_layout(self.G)
+        # pos = nx.circular_layout(self.G)
+        plt.figure(figsize=figsize)
+        pos = nx.spring_layout(self.G)
         nx.draw_networkx_nodes(
             self.G,
             pos=pos,
@@ -128,7 +147,9 @@ class KFNet:
             node_color="r",
             label="Uninitialized",
         )
-        nx.draw_networkx_labels(self.G, pos=pos, labels=node_labels, font_size=12)
+        nx.draw_networkx_labels(
+            self.G, pos=pos, labels=node_labels, font_size=12, font_weight="bold",
+        )
         nx.draw_networkx_edges(self.G, pos=pos, alpha=0.6)
 
         plt.axis("off")
@@ -136,6 +157,8 @@ class KFNet:
         plt.legend(scatterpoints=1)
         plt.show()
 
+    # kfn._init_nbh() -> when?
+    # kfn._get_nbh_ests()
     # kfn.predict()
     # kfn.update()
     # kfn.adapt()
@@ -143,17 +166,91 @@ class KFNet:
     # kfn.time_step()
     # kfn.estimates ??
 
-    def predict(self):
-        pass
+    def _init_nbhood(self):
+        for node in self.G:
+            for neighbor in self.G.neighbors(node):
+                # "self" was added in initialization stage
+                self.G.nodes[node]["nbhood"].append(self.G.nodes[neighbor]["kf"])
 
-    def update(self):
-        pass
+    def predict(self, u=None):
+        if self._is_fully_init():
+            for _, kf in self.G.nodes(data="kf"):
+                kf.predict(u=u)
+        else:
+            self._print_uninitialized()
+
+    def update(self, y):
+        if self._is_fully_init():
+            for _, kf in self.G.nodes(data="kf"):
+                kf.update(y=y, log=True)
+        else:
+            self._print_uninitialized()
 
     def adapt(self):
-        pass
+        if self._is_fully_init():
+            pass
+        else:
+            self._print_uninitialized()
 
-    def combine(self):
-        pass
+    def combine(self, reset_thresh=None):
+        if self._is_fully_init():
+            for node, attrs in self.G.nodes(data=True):
+                kf = attrs["kf"]
+                nbhood = attrs["nbhood"]
+                # Get nbhood estimates
+                # Check if threshold for reset is reached
+                # Covariance intersection
+        else:
+            self._print_uninitialized()
 
     def time_step(self):
         pass
+
+    def _is_fully_init(self):
+        return len(self._node_set) == self.G.order()
+
+    def _print_uninitialized(self):
+        uninitialized = [n for n, d in self.G.nodes(data="kf") if d is None]
+        raise RuntimeError(f"Nodes {uninitialized} are uninitialized")
+
+    def print_topology(self):
+        for n in self.G.nodes(data="kf"):
+            print(n)
+
+        for n in self.G.nodes(data="nbhood"):
+            print(f"{n[0]}: {n[1]}")
+
+    @staticmethod
+    def _get_nbh_estimates(kf, nbhood, reset_thresh=None, indices=None):
+        """ Get estimates from agents in neighborhood. This function should be
+        called after predict() and update() but before cov_intersect().
+
+        Parameters
+        ----------
+        reset_thresh : float, optional
+            Maximum accepted distance from the centroid before the filter reset
+            If None then filter is never reset
+        indices : list-of-lists/arrays, optional
+            A list, the size of neighborhood, of indices of variables over
+            which to get marginal distributions for each agent in neighborhood
+
+            Selects ndim first variables by default, ndim is the dimension of
+            this agent's estimate
+        """
+        if not indices:
+            # Default case
+            indices = [None for i in range(len(nbhood))]
+
+        nbh_ests = []
+        for nbh, i in zip(nbhood, indices):
+            # Only consider estimates from models with same/higher complexity
+            if nbh._ndim >= kf._ndim:
+                # i is usually None -> select first _ndim variables
+                nbh_ests.append(
+                    nbh.get_estimate(
+                        indices=np.arange(kf._ndim, dtype=np.int) if not i else i
+                    )
+                )
+
+        if reset_thresh is not None:
+            kf.reset_filter(reset_thresh)
