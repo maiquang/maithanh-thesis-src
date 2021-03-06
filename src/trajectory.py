@@ -74,6 +74,8 @@ class Trajectory:
             State-space representation model
         n_steps : int
             Number of simulation steps
+        n_obs : int
+            Number of distinct observations in each step
         init_state : np.array, optional
             Initial state vector at t=0, default is a zero vector
         random_seed : int, optional

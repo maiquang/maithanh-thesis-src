@@ -5,14 +5,8 @@ from matplotlib import pyplot as plt
 
 from .kalmanfilter import KalmanFilter
 
-# from statespace import *
-
 
 class KFNet:
-    # kfn = KFNet(nodes, deg, dict/list, seed)
-    # kfn.plot_network(labels="txt/[idx]")
-    # kfn.assign_nodes(dict/list)
-
     def __init__(
         self, nodes=15, avg_deg=10, init=None, txt_labels=None, random_seed=None, G=None
     ):
@@ -28,19 +22,10 @@ class KFNet:
                 raise TypeError(f"G must be a networkX.Graph object, got {type(G)}.")
             self.G = copy.deepcopy(G)
 
-        # To keep track of initialized nodes
+        # Keep track of initialized nodes
         self._node_set = set()
-        # degrees = [d for g, d in self.G.degree]
-        # print(sum(degrees) / nodes)
-        self.assign(init, txt_labels)
 
-        # TODO init using dict {int: model}
-        # TODO init using list/array
-        # TODO init neighborhood -> separate update method?
-        # TODO init txt-labels as node attributes
-        # TODO access using []
-        # TODO batch init using dict/list
-        # TODO maybe custom topologies constructed using networkx
+        self.assign(init, txt_labels)
 
     def assign(self, init=None, txt_labels=None):
         # TODO Check if inputs are KF objects?
@@ -61,7 +46,7 @@ class KFNet:
                     self.G.nodes[idx]["nbhood"] = [init[idx]]
                 self._node_set.update(range(n))
             except KeyError:
-                pass  # Node not in G could be fine
+                pass  # Some node n not in G could be fine
             except:
                 raise TypeError(f"init must be a list or a dict, got {type(init)}.")
 
@@ -136,7 +121,7 @@ class KFNet:
             pos=pos,
             nodelist=in_nodes,
             node_size=node_size,
-            node_color="b",
+            node_color="c",
             label="Initialized",
         )
         nx.draw_networkx_nodes(
@@ -157,13 +142,6 @@ class KFNet:
         plt.legend(scatterpoints=1)
         plt.show()
 
-    # kfn._init_nbh() -> when?
-    # kfn._get_nbh_ests()
-    # kfn.predict()
-    # kfn.update()
-    # kfn.adapt()
-    # kfn.combine() -> kfn.covariance_intersection() ?
-    # kfn.time_step()
     # kfn.estimates ??
 
     def _init_nbhood(self):
@@ -181,30 +159,83 @@ class KFNet:
 
     def update(self, y):
         if self._is_fully_init():
-            for _, kf in self.G.nodes(data="kf"):
-                kf.update(y=y, log=True)
+            # TODO Missing observations?
+            if y.ndim == 2:
+                for yi, (_, kf) in zip(y, self.G.nodes(data="kf")):
+                    kf.update(y=yi)
+            else:
+                for _, kf in self.G.nodes(data="kf"):
+                    kf.update(y=y)
         else:
             self._print_uninitialized()
 
     def adapt(self):
         if self._is_fully_init():
-            pass
-        else:
-            self._print_uninitialized()
-
-    def combine(self, reset_thresh=None):
-        if self._is_fully_init():
-            for node, attrs in self.G.nodes(data=True):
+            for _, attrs in self.G.nodes(data=True):
                 kf = attrs["kf"]
                 nbhood = attrs["nbhood"]
-                # Get nbhood estimates
-                # Check if threshold for reset is reached
-                # Covariance intersection
+                nbh_obs = attrs["nbh_obs"] = self._get_nbh_observations(nbhood[1:])
+
+                y_tmp = kf.y
+                for yi in nbh_obs:
+                    kf.update(y=yi)
+
+                # update() saves latest observation
+                # restore node's original observation
+                kf.y = y_tmp
+
         else:
             self._print_uninitialized()
 
-    def time_step(self):
-        pass
+    def combine(self, reset_strategy="mean", reset_thresh=None):
+        if self._is_fully_init():
+            # Get neighborhood estimates
+            for _, attrs in self.G.nodes(data=True):
+                kf = attrs["kf"]
+                nbhood = attrs["nbhood"]
+                nbh_est = attrs["nbh_est"] = self._get_nbh_estimates(kf, nbhood)
+                if reset_strategy is not None:
+                    self._check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh)
+
+            # Combine estimates using covariance intersection
+            for _, attrs in self.G.nodes(data=True):
+                kf = attrs["kf"]
+                nbh_est = attrs["nbh_est"]
+
+                # Covariance intersection
+                # Possibly other strategies?
+                ci_est = self._cov_intersect(kf, nbh_est)
+                kf.set_estimate(*ci_est)
+        else:
+            self._print_uninitialized()
+
+    def log(self):
+        for _, kf in self.G.nodes(data="kf"):
+            kf._log()
+
+    def time_step(
+        self,
+        y=None,
+        predict=True,
+        update=True,
+        adapt=True,
+        combine=True,
+        reset_strategy="mean",
+        reset_thresh=5.0,
+    ):
+        if self._is_fully_init():
+            if predict:
+                self.predict()
+            if y is not None:
+                if update:
+                    self.update(y)
+                if update and adapt:
+                    self.adapt()
+            if combine:
+                self.combine(reset_strategy, reset_thresh)
+            self.log()
+        else:
+            self._print_uninitialized()
 
     def _is_fully_init(self):
         return len(self._node_set) == self.G.order()
@@ -213,23 +244,49 @@ class KFNet:
         uninitialized = [n for n, d in self.G.nodes(data="kf") if d is None]
         raise RuntimeError(f"Nodes {uninitialized} are uninitialized")
 
-    def print_topology(self):
-        for n in self.G.nodes(data="kf"):
-            print(n)
+    @staticmethod
+    def _check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh):
+        if not isinstance(reset_thresh, (float, int)):
+            raise TypeError(f"Number expected, got {type(reset_thresh)}")
 
-        for n in self.G.nodes(data="nbhood"):
-            print(f"{n[0]}: {n[1]}")
+        if len(nbh_est) < 3:
+            return
+
+        if reset_strategy == "mean":
+            ctr = np.asarray([x for (x, P) in nbh_est[1:]]).mean(axis=0)
+        elif reset_strategy == "ci":
+            ctr, _ = KFNet._cov_intersect(kf, nbh_est[1:])
+        else:
+            raise ValueError(f"Invalid reset_strategy: {reset_strategy}")
+
+        dist_x_ctr = np.linalg.norm(ctr - kf.x)
+
+        obs = kf.get_observation()
+        try:
+            dist_ctr_obs = np.linalg.norm(obs - ctr)
+        except:
+            # Observation is None
+            return
+
+        if dist_x_ctr >= reset_thresh:
+            if dist_ctr_obs >= reset_thresh:
+                xnew = obs
+            else:
+                xnew = ctr
+            kf.reset_filter(xnew)
+            nbh_est[0] = kf.get_estimate()
 
     @staticmethod
-    def _get_nbh_estimates(kf, nbhood, reset_thresh=None, indices=None):
+    def _get_nbh_estimates(kf, nbhood, indices=None):
         """ Get estimates from agents in neighborhood. This function should be
         called after predict() and update() but before cov_intersect().
 
         Parameters
         ----------
-        reset_thresh : float, optional
-            Maximum accepted distance from the centroid before the filter reset
-            If None then filter is never reset
+        kf :
+
+        nbhood :
+
         indices : list-of-lists/arrays, optional
             A list, the size of neighborhood, of indices of variables over
             which to get marginal distributions for each agent in neighborhood
@@ -252,5 +309,55 @@ class KFNet:
                     )
                 )
 
-        if reset_thresh is not None:
-            kf.reset_filter(reset_thresh)
+        return nbh_ests
+
+    @staticmethod
+    def _get_nbh_observations(nbhood):
+        """ Get latest observations from agents in neighborhood.
+
+        Parameters
+        ----------
+        nbh :
+
+        """
+        return [kf.get_observation() for kf in nbhood]
+
+    @staticmethod
+    def _cov_intersect(kf, nbh_est, weights=None, normalize=True):
+        """ Calculate combined estimate from neighborhood agents' estimates
+        using the covariance intersection algorithm. Updated neighborhood
+        estimates should be obtained by calling get_nbh_estimates()
+        before each cov_intersect() call.
+
+        Parameters
+        ----------
+        kf :
+
+        nbh_est :
+
+        weights : list-like
+            Weights for each agent in the neighborhood
+        normalize : bool, optional, default True
+            Normalize weights
+        log : bool, default True
+            Log the resulting state estimate
+        """
+        if weights is None:
+            weights = np.ones(shape=len(nbh_est))
+            weights /= np.sum(weights)
+
+        if normalize is True:
+            weights = np.asarray(weights) / np.sum(weights)
+
+        P_newinv = np.zeros_like(kf.P)
+        xnew = np.zeros_like(kf.x)
+
+        for w, (x, P) in zip(weights, nbh_est):
+            Pinv = np.linalg.inv(P)
+            P_newinv += w * Pinv
+            xnew += w * Pinv.dot(x.T)
+
+        P_new = np.linalg.inv(P_newinv)
+        xnew = P_new.dot(xnew)
+
+        return (xnew, P_new)

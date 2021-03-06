@@ -26,5 +26,4 @@ if __name__ == "__main__":
 
     kfn = KFNet(5, 3, init=kfs_dict, txt_labels=labels)
 
-    kfn.print_topology()
     kfn.draw_network()

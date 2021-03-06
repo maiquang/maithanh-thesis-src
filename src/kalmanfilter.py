@@ -86,6 +86,7 @@ class KalmanFilter:
 
         self._I = np.eye(self._ndim)  # for update() method
         self._history = []  # logging
+        self._reset_log = []
 
     def predict(self, u=None, log=False):
         """ Predict the next state using the state-space equation.
@@ -145,9 +146,23 @@ class KalmanFilter:
 
         self.x = xplus
         self.P = Pplus
+        self.y = y
 
         if log:
             self._log()
+
+    def set_estimate(self, xnew, P_new):
+        """ Update/override the current estimate.
+
+        Parameters
+        ----------
+        xnew : np.array
+            New state estimate x
+        P_new : np.array
+            New covariance matrix P
+        """
+        self.x = xnew
+        self.P = P_new
 
     def get_estimate(self, indices=None):
         """ Get current state estimate.
@@ -166,6 +181,11 @@ class KalmanFilter:
             indices = np.arange(self._ndim, dtype=np.int)
 
         return (self.x[indices], self.P[np.ix_(indices, indices)])
+
+    def get_observation(self):
+        """ Return latest observation.
+        """
+        return self.y
 
     def add_nbhs(self, *kfs):
         """ Add agents to this agent's neighborhood.
@@ -210,7 +230,7 @@ class KalmanFilter:
                 )
 
         if reset_thresh is not None:
-            self.reset_filter(reset_thresh)
+            self._reset_filter(reset_thresh)
 
     def cov_intersect(self, weights=None, normalize=True, log=False):
         """ Calculate combined estimate from neighborhood agents' estimates
@@ -251,7 +271,7 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def reset_filter(self, reset_thresh, init_state=None, init_cov=None):
+    def _reset_filter(self, reset_thresh, init_state=None, init_cov=None):
         """ Reset filter if Euclidean distance from the centroid
         is larger than reset_thresh.
 
@@ -281,6 +301,14 @@ class KalmanFilter:
             self.P = init_cov if init_cov else self._P0
 
             self._nbh_ests[0] = self.get_estimate()
+
+    def reset_filter(self, init_state=None, init_cov=None):
+        self.set_estimate(
+            init_state if init_state is not None else self._x0,
+            init_cov if init_cov is not None else self._P0,
+        )
+
+        self._reset_log.append(len(self._history))
 
     def _log(self):
         self._history.append(self.x.copy())
