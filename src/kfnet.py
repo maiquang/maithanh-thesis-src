@@ -278,13 +278,13 @@ class KFNet:
 
     @staticmethod
     def _get_nbh_estimates(kf, nbhood, indices=None):
-        """ Get estimates from agents in neighborhood. This function should be
-        called after predict() and update() but before cov_intersect().
+        """ Get estimates from agents in neighborhood. This method should be
+        called after predict() and update() but before combine().
 
         Parameters
         ----------
-        kf :
-
+        kf : KalmanFilter object
+            KalmanFilter estimator
         nbhood :
 
         indices : list-of-lists/arrays, optional
@@ -317,8 +317,12 @@ class KFNet:
 
         Parameters
         ----------
-        nbh :
+        nbhood : list
+            List of references to KalmanFilter objects
 
+        Returns
+        -------
+            List of observations from nbhood
         """
         return [kf.get_observation() for kf in nbhood]
 
@@ -326,21 +330,25 @@ class KFNet:
     def _cov_intersect(kf, nbh_est, weights=None, normalize=True):
         """ Calculate combined estimate from neighborhood agents' estimates
         using the covariance intersection algorithm. Updated neighborhood
-        estimates should be obtained by calling get_nbh_estimates()
-        before each cov_intersect() call.
+        estimates should be obtained by calling _get_nbh_estimates()
+        before each _cov_intersect() call.
 
         Parameters
         ----------
-        kf :
-
-        nbh_est :
-
+        kf : KalmanFilter object
+            KalmanFilter estimator
+        nbh_est : list/array of (x, P) tuples
+            Neighborhood estimates
         weights : list-like
             Weights for each agent in the neighborhood
         normalize : bool, optional, default True
             Normalize weights
-        log : bool, default True
-            Log the resulting state estimate
+
+        Returns
+        -------
+        (xnew, P_new): (np.array, np.array)
+            New estimate obtained from covariance intersection
+            of neighborhood estimates
         """
         if weights is None:
             weights = np.ones(shape=len(nbh_est))
