@@ -45,7 +45,7 @@ def plot_traj(traj, obs=None, kf=None):
     plt.plot(
         traj.X[:, 0],
         traj.X[:, 1],
-        label="Real value",
+        label="True value",
         alpha=0.4 if kf is not None else 1.0,
     )
 
@@ -69,7 +69,7 @@ def plot_traj(traj, obs=None, kf=None):
             hist_est[:, 0],
             hist_est[:, 1],
             linestyle="dotted",
-            label="Estimates",
+            label="State estimate",
             color="r",
         )
 
@@ -180,6 +180,6 @@ def plot_estimates(kf, traj, nvars="all", plt_std=True, labels=None):
         plt.xlabel("$t$", fontsize="large")
 
     plt.tight_layout(rect=[0, 0.05, 1, 0.97])
-    plt.figlegend(["Real value", "Estimate", "Filter reset"])
+    plt.figlegend(["True value", "State estimate", "Filter reset"])
     plt.suptitle("Evolution of estimates")
     plt.show()

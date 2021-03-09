@@ -4,43 +4,56 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from .kalmanfilter import KalmanFilter
+from .statespace import RWModel, CVModel, CAModel
 
 
 class KFNet:
     """ Implements communication between KalmanFilter nodes.
+    Uses networkx.expected_degree_graph() to generate the network.
 
     Parameters
     ----------
     nodes : int
-
+        Number of nodes to be generated, ignored if G is provided
     avg_deg : int
-
-    init : list, dict
-
-    txt_labels : list, dict
-
+        Average degree, however, the generator might not produce this exact
+        average degree, ignored if G is provided
+    init : list or dict
+        List of KalmanFilter objects (or dict of {int : KalmanFilter} pairs)
+        to be assigned to nodes
+    txt_labels : list or dict
+        List of labels (or dict of {int : string} pairs) to be assigned to nodes
     random_seed : int, optional
-
+        Random seed for the graph generator
     G : networkx.Graph
+        A custom networkx.Graph to be used
 
     Attributes
     ----------
+    G : networkx.Graph
+        Underlying network.G graph represeting the network topology
 
     Methods
     -------
     assign(init=None, txt_labels=None)
-
+        Assign KalmanFilter objects to nodes.
+    generate_txt_labels()
+        Generate text labels for nodes based on their motion model.
     draw_network(self, node_size, figsize)
-
+        Draw network.
     predict()
-
+        Run KalmanFilter predict step on all nodes.
     update(y)
-
+        Run KalmanFilter update step on all nodes.
     adapt()
-
+        Adaptation step - incorporates observations from neighbor nodes
+        using update().
     combine(reset_strategy, reset_thresh)
-
+        Combination step - combines estimates from neighbors using
+        covariance intersection algorithm.
     time_step(predict, update, adapt, combine, reset_strategy, reset_thresh=5.0)
+        Runs one iteration of diffusion Kalman filtering
+        using adapt-then-combine strategy.
     """
 
     def __init__(
@@ -51,17 +64,19 @@ class KFNet:
         Parameters
         ----------
         nodes : int
-
+            Number of nodes to be generated, ignored if G is provided
         avg_deg : int
-
-        init : list, dict, optional
-
-        txt_labels : list, dict, optional
-
+            Average degree, however, the generator might not produce this exact
+            average degree, ignored if G is provided
+        init : list or dict
+            List of KalmanFilter objects (or dict of {int : KalmanFilter} pairs)
+            to be assigned to nodes
+        txt_labels : list or dict
+            List of labels (or dict of {int : string} pairs) to be assigned to nodes
         random_seed : int, optional
-
-        G : networkx.Graph, optional
-
+            Random seed for the graph generator
+        G : networkx.Graph
+            A custom networkx.Graph to be used
         """
         if G is None:
             while True:
@@ -85,10 +100,11 @@ class KFNet:
 
         Parameters
         ----------
-        init : list, dict
-
-        txt_labels : list, dict, optional
-
+        init : list or dict
+            List of KalmanFilter objects (or dict of {int : KalmanFilter} pairs)
+            to be assigned to nodes
+        txt_labels : list or dict
+            List of strings (or dict of {int : string} pairs) to be assigned to nodes
         """
         # TODO Check if inputs are KF objects?
         if init is not None:
@@ -138,6 +154,32 @@ class KFNet:
         if self._is_fully_init():
             self._init_nbhood()
 
+    def generate_txt_labels(self):
+        """ Generate text labels for nodes based on their motion model.
+        """
+        rwm_cnt = 0
+        cvm_cnt = 0
+        cam_cnt = 0
+
+        for _, attrs in self.G.nodes(data=True):
+            try:
+                model = attrs["kf"].model
+                if isinstance(model, RWModel):
+                    rwm_cnt += 1
+                    txt_label = f"RWM_{rwm_cnt}"
+                elif isinstance(model, CVModel):
+                    cvm_cnt += 1
+                    txt_label = f"CVM_{cvm_cnt}"
+                elif isinstance(model, CAModel):
+                    cam_cnt += 1
+                    txt_label = f"CAM_{cam_cnt}"
+                else:
+                    txt_label = "N/A"
+
+                attrs["txt_label"] = txt_label
+            except KeyError:
+                pass
+
     def __getitem__(self, key):
         return self.G.nodes[key]["kf"]
 
@@ -161,12 +203,15 @@ class KFNet:
         return (kf for _, kf in self.G.nodes(data="kf") if kf is not None)
 
     def draw_network(self, node_size=1000, figsize=(10, 7)):
+        # TODO Distinct colors for RWM/CVM/CAM?
         """ Draw network.
 
+        Parameters
+        ----------
         node_size: int, default 1000
-
+            Node size
         figsize: tuple (int, int), default (10, 7)
-
+            Figure size (for pyplot)
         """
         in_nodes = []
         out_nodes = []
@@ -280,9 +325,12 @@ class KFNet:
         Parameters
         ----------
         reset_strategy : [None, "mean", "ci"]
-
+            "mean": centroid is calculated as the uniformly weighted
+                arithmetic mean of neighbor estimates
+            "ci": centroid is calculated as covariance intersection
+                of neighbor estimates (i. e., "uncertainty weighted")
         reset_threshold : float
-
+            Maximum accepted distance from the centroid before the filter reset
         """
         if self._is_fully_init():
             # Get neighborhood estimates
@@ -324,20 +372,27 @@ class KFNet:
 
         Parameters
         ----------
-        y :
+        y : np.array of shape (n, m)
+            n - number of nodes
+            m - observation dimension
 
+            Set of observations for this time step, single observations
+            can be used as well (identical observation for all nodes)
         predict : bool, default True
-
+            Run predict step
         update : bool, default True
-
+            Run update step
         adapt : bool, default True
-
+            Run adapt step
         combine : bool, default True
-
+            Run combine step
         reset_strategy : [None, "mean", "ci"]
-
+            "mean": centroid is calculated as the uniformly weighted
+                arithmetic mean of neighbor estimates
+            "ci": centroid is calculated as covariance intersection
+                of neighbor estimates (i. e., "uncertainty weighted")
         reset_threshold : float
-
+            Maximum accepted distance from the centroid before the filter reset
         """
         if self._is_fully_init():
             if predict:
