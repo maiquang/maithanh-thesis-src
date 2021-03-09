@@ -5,7 +5,7 @@ from .statespace import StateSpace
 
 
 class Trajectory:
-    """ Trajectory simulator class
+    """ Trajectory simulator class.
 
     Parameters
     ----------

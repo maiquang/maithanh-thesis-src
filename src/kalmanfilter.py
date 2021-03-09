@@ -72,14 +72,14 @@ class KalmanFilter:
         self._ndim = self.model.A.shape[0]
 
         # Initialize current estimates with priors
-        self.x = x0 if x0 else np.zeros(self._ndim)
-        self.P = P0 if P0 else np.eye(self._ndim) * 1000
+        self.x = x0 if x0 is not None else np.zeros(self._ndim)
+        self.P = P0 if P0 is not None else np.eye(self._ndim) * 1000
 
         self.y = None  # latest observation
 
         # Save priors in case a reset is needed
-        self._x0 = x0 if x0 else np.zeros(self._ndim)
-        self._P0 = P0 if P0 else np.eye(self._ndim) * 1000
+        self._x0 = x0 if x0 is not None else np.zeros(self._ndim)
+        self._P0 = P0 if P0 is not None else np.eye(self._ndim) * 1000
 
         self._I = np.eye(self._ndim)  # for update() method
 

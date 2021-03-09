@@ -28,8 +28,57 @@ def rmse(y, x, n):
     return np.sqrt(((y[:n] - x[:n]) ** 2).cumsum(axis=0) / t.reshape(n, 1))
 
 
-def plot_traj(traj):
-    pass
+def plot_traj(traj, obs=None, kf=None):
+    """ Plot 2D trajectory.
+
+    Parameters
+    ----------
+    traj : Trajectory object
+        Simulated trajectory
+    obs : int, optional
+        Which set of observations to plot
+    kf : KalmanFilter object, optional
+        KalmanFilter estimator, plot estimates
+    """
+    plt.figure(figsize=(10, 10))
+    # plt.axis("equal")
+    plt.plot(
+        traj.X[:, 0],
+        traj.X[:, 1],
+        label="Real value",
+        alpha=0.4 if kf is not None else 1.0,
+    )
+
+    if obs is not None:
+        if traj.Y.ndim == 3:
+            plt.plot(
+                traj.Y[:, obs, 0],
+                traj.Y[:, obs, 1],
+                "+",
+                label="Observations",
+                alpha=0.5,
+            )
+        else:
+            # Only one set of observations exists
+            plt.plot(
+                traj.Y[:, 0], traj.Y[:, 1], "+", label="Observations", alpha=0.5,
+            )
+    if kf is not None:
+        hist_est = kf.history
+        plt.plot(
+            hist_est[:, 0],
+            hist_est[:, 1],
+            linestyle="dotted",
+            label="Estimates",
+            color="r",
+        )
+
+    plt.xlabel(f"$x_1$", fontsize="large")
+    plt.ylabel(f"$x_2$", fontsize="large")
+
+    plt.legend()
+    plt.title("Trajectory")
+    plt.show()
 
 
 def plot_rmse(traj, *kfs, nvars="all", var_labels=None, kf_labels=None):

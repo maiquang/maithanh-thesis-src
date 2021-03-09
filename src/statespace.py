@@ -3,7 +3,7 @@ import numpy as np
 
 class StateSpace:
     """
-    Discrete time-invariant state-space representation
+    Discrete time-invariant state-space representation.
 
         Parameters
     ----------

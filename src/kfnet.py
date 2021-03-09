@@ -7,9 +7,62 @@ from .kalmanfilter import KalmanFilter
 
 
 class KFNet:
+    """ Implements communication between KalmanFilter nodes.
+
+    Parameters
+    ----------
+    nodes : int
+
+    avg_deg : int
+
+    init : list, dict
+
+    txt_labels : list, dict
+
+    random_seed : int, optional
+
+    G : networkx.Graph
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+    assign(init=None, txt_labels=None)
+
+    draw_network(self, node_size, figsize)
+
+    predict()
+
+    update(y)
+
+    adapt()
+
+    combine(reset_strategy, reset_thresh)
+
+    time_step(predict, update, adapt, combine, reset_strategy, reset_thresh=5.0)
+    """
+
     def __init__(
         self, nodes=15, avg_deg=10, init=None, txt_labels=None, random_seed=None, G=None
     ):
+        """ Generate and initialize network.
+
+        Parameters
+        ----------
+        nodes : int
+
+        avg_deg : int
+
+        init : list, dict, optional
+
+        txt_labels : list, dict, optional
+
+        random_seed : int, optional
+
+        G : networkx.Graph, optional
+
+        """
         if G is None:
             while True:
                 self.G = nx.expected_degree_graph(
@@ -28,6 +81,15 @@ class KFNet:
         self.assign(init, txt_labels)
 
     def assign(self, init=None, txt_labels=None):
+        """ Assign KalmanFilter objects to nodes.
+
+        Parameters
+        ----------
+        init : list, dict
+
+        txt_labels : list, dict, optional
+
+        """
         # TODO Check if inputs are KF objects?
         if init is not None:
             try:
@@ -99,6 +161,13 @@ class KFNet:
         return (kf for _, kf in self.G.nodes(data="kf") if kf is not None)
 
     def draw_network(self, node_size=1000, figsize=(10, 7)):
+        """ Draw network.
+
+        node_size: int, default 1000
+
+        figsize: tuple (int, int), default (10, 7)
+
+        """
         in_nodes = []
         out_nodes = []
         node_labels = {}
@@ -151,6 +220,13 @@ class KFNet:
                 self.G.nodes[node]["nbhood"].append(self.G.nodes[neighbor]["kf"])
 
     def predict(self, u=None):
+        """ Run KalmanFilter predict step on all nodes.
+
+        Parameters
+        ----------
+        u : np.array, optional
+            Optional control vector
+        """
         if self._is_fully_init():
             for _, kf in self.G.nodes(data="kf"):
                 kf.predict(u=u)
@@ -158,6 +234,13 @@ class KFNet:
             self._print_uninitialized()
 
     def update(self, y):
+        """ Run KalmanFilter update step on all nodes.
+
+        Parameters
+        ----------
+        y : np.array
+            Observation for this time step
+        """
         if self._is_fully_init():
             # TODO Missing observations?
             if y.ndim == 2:
@@ -170,6 +253,9 @@ class KFNet:
             self._print_uninitialized()
 
     def adapt(self):
+        """ Adaptation step - incorporates observations from neighbor nodes
+        using update().
+        """
         if self._is_fully_init():
             for _, attrs in self.G.nodes(data=True):
                 kf = attrs["kf"]
@@ -188,6 +274,16 @@ class KFNet:
             self._print_uninitialized()
 
     def combine(self, reset_strategy="mean", reset_thresh=None):
+        """ Combination step - combines estimates from neighbors using
+        covariance intersection algorithm.
+
+        Parameters
+        ----------
+        reset_strategy : [None, "mean", "ci"]
+
+        reset_threshold : float
+
+        """
         if self._is_fully_init():
             # Get neighborhood estimates
             for _, attrs in self.G.nodes(data=True):
@@ -223,6 +319,26 @@ class KFNet:
         reset_strategy="mean",
         reset_thresh=5.0,
     ):
+        """ Runs one iteration of diffusion Kalman filtering
+        using adapt-then-combine strategy.
+
+        Parameters
+        ----------
+        y :
+
+        predict : bool, default True
+
+        update : bool, default True
+
+        adapt : bool, default True
+
+        combine : bool, default True
+
+        reset_strategy : [None, "mean", "ci"]
+
+        reset_threshold : float
+
+        """
         if self._is_fully_init():
             if predict:
                 self.predict()
