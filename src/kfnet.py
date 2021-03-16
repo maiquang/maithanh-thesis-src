@@ -23,6 +23,10 @@ class KFNet:
         to be assigned to nodes
     txt_labels : list or dict
         List of labels (or dict of {int : string} pairs) to be assigned to nodes
+    w_adapt : 2D np.array
+        Adaptation weights matrix
+    w_combine : 2D np.array
+        Combination weights matrix
     random_seed : int, optional
         Random seed for the graph generator
     G : networkx.Graph
@@ -57,7 +61,15 @@ class KFNet:
     """
 
     def __init__(
-        self, nodes=15, avg_deg=10, init=None, txt_labels=None, random_seed=None, G=None
+        self,
+        nodes=15,
+        avg_deg=10,
+        init=None,
+        txt_labels=None,
+        w_adapt=None,
+        w_combine=None,
+        random_seed=None,
+        G=None,
     ):
         """ Generate and initialize network.
 
@@ -73,6 +85,10 @@ class KFNet:
             to be assigned to nodes
         txt_labels : list or dict
             List of labels (or dict of {int : string} pairs) to be assigned to nodes
+        w_adapt : 2D np.array
+            Adaptation weights matrix
+        w_combine : 2D np.array
+            Combination weights matrix
         random_seed : int, optional
             Random seed for the graph generator
         G : networkx.Graph
@@ -92,6 +108,9 @@ class KFNet:
 
         # Keep track of initialized nodes
         self._node_set = set()
+
+        self.w_adapt = w_adapt
+        self.w_combine = w_combine
 
         self.assign(init, txt_labels)
 
@@ -257,12 +276,24 @@ class KFNet:
         plt.show()
 
     def _init_nbhood(self):
-        for node in self.G:
+        # Default weights, if they are not provided
+        if self.w_adapt is None:
+            self.w_adapt = np.ones((self.G.order(), self.G.order()))
+
+        if self.w_combine is None:
+            self.w_combine = np.ones((self.G.order(), self.G.order()))
+
+        for node, attrs in self.G.nodes(data=True):
+            w_adapt = [self.w_adapt[node, node]]
+            w_combine = [self.w_combine[node, node]]
             for neighbor in self.G.neighbors(node):
                 # "self" was added in initialization stage
-                self.G.nodes[node]["nbhood"].append(self.G.nodes[neighbor]["kf"])
-                # init combine weights
-                # init adapt weights
+                attrs["nbhood"].append(self.G.nodes[neighbor]["kf"])
+                # Init weights from matrices
+                w_adapt.append(self.w_adapt[node, neighbor])
+                w_combine.append(self.w_combine[node, neighbor])
+            attrs["w_adapt"] = w_adapt
+            attrs["w_combine"] = w_combine
 
     def predict(self, u=None):
         """ Run KalmanFilter predict step on all nodes.
@@ -289,11 +320,13 @@ class KFNet:
         if self._is_fully_init():
             # TODO Missing observations?
             if y.ndim == 2:
-                for yi, (_, kf) in zip(y, self.G.nodes(data="kf")):
-                    kf.update(y=yi)
+                # The same observation for all nodes
+                for yi, (node, kf) in zip(y, self.G.nodes(data="kf")):
+                    kf.update(y=yi, w=self.w_adapt[node, node])
             else:
-                for _, kf in self.G.nodes(data="kf"):
-                    kf.update(y=y)
+                # Different observation for each node
+                for node, kf in self.G.nodes(data="kf"):
+                    kf.update(y=y, w=self.w_adapt[node, node])
         else:
             self._print_uninitialized()
 
@@ -306,10 +339,12 @@ class KFNet:
                 kf = attrs["kf"]
                 nbhood = attrs["nbhood"]
                 nbh_obs = attrs["nbh_obs"] = self._get_nbh_observations(nbhood[1:])
+                w_adapt = attrs["w_adapt"][1:]
 
                 y_tmp = kf.y
-                for yi in nbh_obs:
-                    kf.update(y=yi)
+                for (yi, Ri), w in zip(nbh_obs, w_adapt):
+                    # Technically, observation matrix H should be passed in as well
+                    kf.update(y=yi, R=Ri, w=w)
 
                 # update() saves latest observation
                 # restore node's original observation
@@ -337,18 +372,31 @@ class KFNet:
             for _, attrs in self.G.nodes(data=True):
                 kf = attrs["kf"]
                 nbhood = attrs["nbhood"]
-                nbh_est = attrs["nbh_est"] = self._get_nbh_estimates(kf, nbhood)
+                nbh_w = attrs["w_combine"]
+
+                # Only use estimates from models of the same complexity or better
+                # Also need to obtain the correct weights
+                attrs["nbh_est"], attrs["w_combine"] = self._get_nbh_estimates(
+                    kf, nbhood, nbh_w
+                )
                 if reset_strategy is not None:
-                    self._check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh)
+                    self._check_reset_cond(
+                        kf,
+                        attrs["nbh_est"],
+                        attrs["w_combine"],
+                        reset_strategy,
+                        reset_thresh,
+                    )
 
             # Combine estimates using covariance intersection
             for _, attrs in self.G.nodes(data=True):
                 kf = attrs["kf"]
                 nbh_est = attrs["nbh_est"]
+                w_combine = attrs["w_combine"]
 
-                # Covariance intersection
-                # Possibly other strategies?
-                ci_est = self._cov_intersect(kf, nbh_est)
+                # Unzip into array of estimates and array of cov. matrices
+                xi_arr, Pi_arr = zip(*nbh_est)
+                ci_est = self._cov_intersect(xi_arr, Pi_arr, w_combine)
                 kf.set_estimate(*ci_est)
         else:
             self._print_uninitialized()
@@ -423,14 +471,26 @@ class KFNet:
             for _, attrs in self.G.nodes(data=True):
                 kf = attrs["kf"]
                 nbhood = attrs["nbhood"]
-                nbh_est = attrs["nbh_est"] = self._get_nbh_estimates(kf, nbhood)
+                nbh_w = attrs["w_combine"]
+
+                # Only use estimates from models of the same complexity or better
+                # Also need to obtain the correct weights
+                attrs["nbh_est"], attrs["w_combine"] = self._get_nbh_estimates(
+                    kf, nbhood, nbh_w
+                )
                 if reset_strategy is not None:
-                    self._check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh)
+                    self._check_reset_cond(
+                        kf,
+                        attrs["nbh_est"],
+                        attrs["w_combine"],
+                        reset_strategy,
+                        reset_thresh,
+                    )
         else:
             self._print_uninitialized()
 
     @staticmethod
-    def _check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh):
+    def _check_reset_cond(kf, nbh_est, nbh_w, reset_strategy, reset_thresh):
         if not isinstance(reset_thresh, (float, int)):
             raise TypeError(f"Number expected, got {type(reset_thresh)}")
 
@@ -438,15 +498,19 @@ class KFNet:
             return
 
         if reset_strategy == "mean":
+            # Centoid as arithmetic mean of estiamtes
+            # TODO weights?
             ctr = np.asarray([x for (x, P) in nbh_est[1:]]).mean(axis=0)
         elif reset_strategy == "ci":
-            ctr, _ = KFNet._cov_intersect(kf, nbh_est[1:])
+            # Centoid calculated using covariance intersection
+            xi_arr, Pi_arr = zip(*nbh_est[1:])
+            ctr, _ = KFNet._cov_intersect(xi_arr, Pi_arr, nbh_w[1:])
         else:
             raise ValueError(f"Invalid reset_strategy: {reset_strategy}")
 
         dist_x_ctr = np.linalg.norm(ctr - kf.x)
 
-        obs = kf.get_observation()
+        obs, _ = kf.get_observation()
         try:
             nbdim_obs = obs.shape[0]
             dist_ctr_obs = np.linalg.norm(obs - ctr[:nbdim_obs])
@@ -464,11 +528,12 @@ class KFNet:
                 # No observation is available
                 xnew = ctr
 
+            # Update estimate in nbh_est array
             kf.reset_filter(xnew)
             nbh_est[0] = kf.get_estimate()
 
     @staticmethod
-    def _get_nbh_estimates(kf, nbhood, indices=None):
+    def _get_nbh_estimates(kf, nbhood, nbh_w, indices=None):
         """ Get estimates from agents in neighborhood. This method should be
         called after predict() and update() but before combine().
 
@@ -490,8 +555,9 @@ class KFNet:
             indices = [None for i in range(len(nbhood))]
 
         nbh_ests = []
-        for nbh, i in zip(nbhood, indices):
-            # Only consider estimates from models with same/higher complexity
+        weights = []
+        for nbh, i, w in zip(nbhood, indices, nbh_w):
+            # Only consider estimates from models with the same/higher complexity
             if nbh._ndim >= kf._ndim:
                 # i is usually None -> select first _ndim variables
                 nbh_ests.append(
@@ -499,8 +565,9 @@ class KFNet:
                         indices=np.arange(kf._ndim, dtype=np.int) if not i else i
                     )
                 )
+                weights.append(w)
 
-        return nbh_ests
+        return nbh_ests, weights
 
     @staticmethod
     def _get_nbh_observations(nbhood):
@@ -518,20 +585,17 @@ class KFNet:
         return [kf.get_observation() for kf in nbhood]
 
     @staticmethod
-    def _cov_intersect(kf, nbh_est, weights=None, normalize=True):
-        """ Calculate combined estimate from neighborhood agents' estimates
-        using the covariance intersection algorithm. Updated neighborhood
-        estimates should be obtained by calling _get_nbh_estimates()
-        before each _cov_intersect() call.
+    def _cov_intersect(xi_arr, Pi_arr, weights=None, normalize=True):
+        """ Combine estimates using covariance intersection.
 
         Parameters
         ----------
-        kf : KalmanFilter object
-            KalmanFilter estimator
-        nbh_est : list/array of (x, P) tuples
-            Neighborhood estimates
-        weights : list-like
-            Weights for each agent in the neighborhood
+        xi_arr : np.array
+            Array of state estimates
+        Pi_arr : np.array
+            Array of corresponding covariance matrices
+        weights : np.array
+            Array of weights
         normalize : bool, optional, default True
             Normalize weights
 
@@ -542,17 +606,17 @@ class KFNet:
             of neighborhood estimates
         """
         if weights is None:
-            weights = np.ones(shape=len(nbh_est))
+            weights = np.ones(shape=len(xi_arr))
             weights /= np.sum(weights)
 
         if normalize is True:
             weights = np.asarray(weights) / np.sum(weights)
 
         # Loop based version
-        # P_newinv = np.zeros_like(kf.P)
-        # xnew = np.zeros_like(kf.x)
+        # xnew = np.zeros_like(xi_arr[0])
+        # P_newinv = np.zeros_like(Pi_arr[0])
 
-        # for w, (x, P) in zip(weights, nbh_est):
+        # for w, x, P in zip(weights, xi_arr, Pi_arr):
         #     Pinv = np.linalg.inv(P)
         #     P_newinv += w * Pinv
         #     xnew += w * Pinv.dot(x.T)
@@ -561,12 +625,64 @@ class KFNet:
         # xnew = P_new.dot(xnew)
 
         # NumPy vectorized version
-        xis, Pis = zip(*nbh_est)
+        # xis, Pis = zip(*nbh_est)
 
-        P_newinv = weights[:, np.newaxis, np.newaxis] * np.linalg.inv(Pis)
-        xnew = np.sum(np.einsum("ikj, ij -> ik", P_newinv, xis), axis=0)
+        P_newinv = weights[:, np.newaxis, np.newaxis] * np.linalg.inv(Pi_arr)
+        xnew = np.sum(np.einsum("ikj, ij -> ik", P_newinv, xi_arr), axis=0)
 
         P_new = np.linalg.inv(np.sum(P_newinv, axis=0))
         xnew = P_new.dot(xnew)
 
         return (xnew, P_new)
+
+    @property
+    def w_adapt(self):
+        """ Weight matrix for adapt step.
+        """
+        return self._w_adapt
+
+    @w_adapt.setter
+    def w_adapt(self, w_adapt):
+        """ Set weight matrix for adapt step.
+        """
+        if (w_adapt is not None) and (
+            np.asarray(w_adapt).shape != (self.G.order(), self.G.order())
+        ):
+            raise ValueError(
+                f"Weight matrix of shape {self.G.order(), self.G.order()} expected."
+            )
+        self._w_adapt = w_adapt
+
+        if self._is_fully_init():
+            self._init_nbhood()
+
+    @property
+    def w_combine(self):
+        """ Weight matrix for combine step.
+        """
+        return self._w_combine
+
+    @w_combine.setter
+    def w_combine(self, w_combine):
+        """ Set weight matrix for combine step.
+        """
+        if (w_combine is not None) and (
+            np.asarray(w_combine).shape != (self.G.order(), self.G.order())
+        ):
+            raise ValueError(
+                f"Weight matrix of shape {self.G.order(), self.G.order()} expected."
+            )
+        self._w_combine = w_combine
+
+        if self._is_fully_init():
+            self._init_nbhood()
+
+    def print_node_attr(self, attr, node="all"):
+        if node == "all":
+            for n in self.G.nodes(data=True if attr == "all" else attr):
+                print(n)
+        else:
+            if attr == "all":
+                print(self.G.nodes[node])
+            else:
+                print(self.G.nodes[node][attr])

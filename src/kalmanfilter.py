@@ -112,7 +112,7 @@ class KalmanFilter:
         if log:
             self._log()
 
-    def update(self, y, R=None, log=False):
+    def update(self, y, R=None, w=1.0, log=False):
         """ Correct/update the current state estimate.
 
         Parameters
@@ -136,7 +136,7 @@ class KalmanFilter:
         PHT = self.P.dot(H.T)
         # K = PH'(HPH' + R)^-1
         K = np.linalg.inv(H.dot(PHT) + R)
-        K = PHT.dot(K)
+        K = w * PHT.dot(K)
 
         # x+ = x-  +K(y - Hx-)
         innov = y - H.dot(self.x)
@@ -144,6 +144,7 @@ class KalmanFilter:
 
         # P+ = (I-KH)P-(I-KH)' + KRK'
         # Should support non-optimal K
+        # P+ = (I-KH)P- is sometimes used in other implementations
         I_KH = self._I - K.dot(H)
         KRK = K.dot(R).dot(K.T)
         Pplus = I_KH.dot(self.P).dot(I_KH.T) + KRK
@@ -193,8 +194,10 @@ class KalmanFilter:
         -------
         y : np.array
             Latest obtained observation from update()
+        R : np.array
+            Observation noise matrix
         """
-        return self.y
+        return self.y, self.model.R
 
     def reset_filter(self, init_state=None, init_cov=None):
         """ Reset the filter and initialize with init_state and init_cov.
