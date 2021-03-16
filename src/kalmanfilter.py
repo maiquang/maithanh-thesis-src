@@ -126,8 +126,13 @@ class KalmanFilter:
         """
         if R is None:
             R = self.model.R
-        H = self.model.H
 
+        if y is None:
+            # No observation is available
+            self.y = None
+            return
+
+        H = self.model.H
         PHT = self.P.dot(H.T)
         # K = PH'(HPH' + R)^-1
         K = np.linalg.inv(H.dot(PHT) + R)

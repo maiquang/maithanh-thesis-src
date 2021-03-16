@@ -256,13 +256,13 @@ class KFNet:
         plt.legend(scatterpoints=1)
         plt.show()
 
-    # kfn.estimates ??
-
     def _init_nbhood(self):
         for node in self.G:
             for neighbor in self.G.neighbors(node):
                 # "self" was added in initialization stage
                 self.G.nodes[node]["nbhood"].append(self.G.nodes[neighbor]["kf"])
+                # init combine weights
+                # init adapt weights
 
     def predict(self, u=None):
         """ Run KalmanFilter predict step on all nodes.
@@ -415,6 +415,20 @@ class KFNet:
         uninitialized = [n for n, d in self.G.nodes(data="kf") if d is None]
         raise RuntimeError(f"Nodes {uninitialized} are uninitialized")
 
+    def reset_filters(self, reset_strategy, reset_thresh):
+        """
+        """
+        if self._is_fully_init():
+            # Get neighborhood estimates
+            for _, attrs in self.G.nodes(data=True):
+                kf = attrs["kf"]
+                nbhood = attrs["nbhood"]
+                nbh_est = attrs["nbh_est"] = self._get_nbh_estimates(kf, nbhood)
+                if reset_strategy is not None:
+                    self._check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh)
+        else:
+            self._print_uninitialized()
+
     @staticmethod
     def _check_reset_cond(kf, nbh_est, reset_strategy, reset_thresh):
         if not isinstance(reset_thresh, (float, int)):
@@ -434,16 +448,22 @@ class KFNet:
 
         obs = kf.get_observation()
         try:
-            dist_ctr_obs = np.linalg.norm(obs - ctr)
-        except:
-            # Observation is None
-            return
+            nbdim_obs = obs.shape[0]
+            dist_ctr_obs = np.linalg.norm(obs - ctr[:nbdim_obs])
+        except TypeError:
+            # No observation is available
+            pass
 
         if dist_x_ctr >= reset_thresh:
-            if dist_ctr_obs >= reset_thresh:
-                xnew = obs
-            else:
+            try:
+                if dist_ctr_obs >= reset_thresh:
+                    xnew = obs
+                else:
+                    xnew = ctr
+            except NameError:
+                # No observation is available
                 xnew = ctr
+
             kf.reset_filter(xnew)
             nbh_est[0] = kf.get_estimate()
 
@@ -528,15 +548,25 @@ class KFNet:
         if normalize is True:
             weights = np.asarray(weights) / np.sum(weights)
 
-        P_newinv = np.zeros_like(kf.P)
-        xnew = np.zeros_like(kf.x)
+        # Loop based version
+        # P_newinv = np.zeros_like(kf.P)
+        # xnew = np.zeros_like(kf.x)
 
-        for w, (x, P) in zip(weights, nbh_est):
-            Pinv = np.linalg.inv(P)
-            P_newinv += w * Pinv
-            xnew += w * Pinv.dot(x.T)
+        # for w, (x, P) in zip(weights, nbh_est):
+        #     Pinv = np.linalg.inv(P)
+        #     P_newinv += w * Pinv
+        #     xnew += w * Pinv.dot(x.T)
 
-        P_new = np.linalg.inv(P_newinv)
+        # P_new = np.linalg.inv(P_newinv)
+        # xnew = P_new.dot(xnew)
+
+        # NumPy vectorized version
+        xis, Pis = zip(*nbh_est)
+
+        P_newinv = weights[:, np.newaxis, np.newaxis] * np.linalg.inv(Pis)
+        xnew = np.sum(np.einsum("ikj, ij -> ik", P_newinv, xis), axis=0)
+
+        P_new = np.linalg.inv(np.sum(P_newinv, axis=0))
         xnew = P_new.dot(xnew)
 
         return (xnew, P_new)
