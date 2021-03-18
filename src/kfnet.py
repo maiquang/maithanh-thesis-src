@@ -677,7 +677,7 @@ class KFNet:
         if self._is_fully_init():
             self._init_nbhood()
 
-    def print_node_attr(self, attr, node="all"):
+    def print_node_attr(self, attr="all", node="all"):
         if node == "all":
             for n in self.G.nodes(data=True if attr == "all" else attr):
                 print(n)
