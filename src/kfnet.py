@@ -96,21 +96,27 @@ class KFNet:
         """
         if G is None:
             while True:
-                self.G = nx.expected_degree_graph(
+                G = nx.expected_degree_graph(
                     w=[avg_deg for _ in range(nodes)], seed=random_seed, selfloops=False
                 )
-                if nx.is_connected(self.G):
+                if nx.is_connected(G):
                     break
         else:
             if not isinstance(G, nx.Graph):
                 raise TypeError(f"G must be a networkX.Graph object, got {type(G)}.")
-            self.G = copy.deepcopy(G)
 
-        # Keep track of initialized nodes
-        self._node_set = set()
+        self.nnodes = G.order()
+        self.adj_mat = nx.to_numpy_array(
+            G, nodelist=sorted(G.nodes), dtype=np.int
+        ) + np.eye(self.nnodes, dtype=np.int)
 
-        self.w_adapt = w_adapt
-        self.w_combine = w_combine
+        self.kfs = [None] * self.nnodes
+        self.txt_labels = [None] * self.nnodes
+        self.nbh_est = [None] * self.nnodes
+
+        # Initialize adaptation and combination weight matrices
+        self.w_adapt = np.ones_like(self.adj_mat) if w_adapt is None else w_adapt
+        self.w_combine = np.ones_like(self.adj_mat) if w_combine is None else w_combine
 
         self.assign(init, txt_labels)
 
@@ -128,50 +134,45 @@ class KFNet:
         # TODO Check if inputs are KF objects?
         if init is not None:
             try:
-                if len(init) > self.G.order():
+                if len(init) > self.nnodes:
                     print("[KFNet] Warning: size of init is more than number of nodes")
                 # Dict initilization
                 for idx, kf in init.items():
-                    self.G.nodes[idx]["kf"] = kf
-                    self.G.nodes[idx]["nbhood"] = [kf]
-                self._node_set.update(init.keys())
+                    try:
+                        self.kfs[idx] = kf
+                    except IndexError:
+                        continue
             except AttributeError:
                 # List initialization
-                n = self.G.order() if self.G.order() <= len(init) else len(init)
-                for idx in range(n):
-                    self.G.nodes[idx]["kf"] = init[idx]
-                    self.G.nodes[idx]["nbhood"] = [init[idx]]
-                self._node_set.update(range(n))
+                n = self.nnodes if self.nnodes <= len(init) else len(init)
+                self.kfs[:n] = init[:n]
             except KeyError:
-                pass  # Some node n not in G could be fine
+                pass
             except:
                 raise TypeError(f"init must be a list or a dict, got {type(init)}.")
 
         if txt_labels is not None:
             try:
-                if len(txt_labels) > self.G.order():
+                if len(txt_labels) > self.nnodes:
                     print(
                         "[KFNet] Warning: size of txt_labels is more than number of nodes"
                     )
                 # Dict initilization
-                for idx, kf in txt_labels.items():
-                    self.G.nodes[idx]["txt_label"] = kf
+                for idx, lbl in txt_labels.items():
+                    try:
+                        self.txt_labels[idx] = lbl
+                    except IndexError:
+                        continue
             except AttributeError:
                 # List initialization
-                n = (
-                    self.G.order()
-                    if self.G.order() <= len(txt_labels)
-                    else len(txt_labels)
-                )
-                for idx in range(n):
-                    self.G.nodes[idx]["txt_label"] = txt_labels[idx]
+                n = self.nnodes if self.nnodes <= len(txt_labels) else len(txt_labels)
+                self.txt_labels = txt_labels[:n]
+            except KeyError:
+                pass  # Some node n not in G could be fine
             except:
                 raise TypeError(
                     f"txt_labels must be a list or a dict, got {type(txt_labels)}."
                 )
-
-        if self._is_fully_init():
-            self._init_nbhood()
 
     def generate_txt_labels(self):
         """ Generate text labels for nodes based on their motion model.
@@ -180,46 +181,40 @@ class KFNet:
         cvm_cnt = 0
         cam_cnt = 0
 
-        for _, attrs in self.G.nodes(data=True):
+        for i, kf in enumerate(self.kfs):
             try:
-                model = attrs["kf"].model
-                if isinstance(model, RWModel):
-                    rwm_cnt += 1
-                    txt_label = f"RWM_{rwm_cnt}"
-                elif isinstance(model, CVModel):
-                    cvm_cnt += 1
-                    txt_label = f"CVM_{cvm_cnt}"
-                elif isinstance(model, CAModel):
-                    cam_cnt += 1
-                    txt_label = f"CAM_{cam_cnt}"
-                else:
-                    txt_label = "N/A"
+                model = kf.model
+            except AttributeError:
+                continue
+            if isinstance(model, RWModel):
+                rwm_cnt += 1
+                txt_label = f"RWM_{rwm_cnt}"
+            elif isinstance(model, CVModel):
+                cvm_cnt += 1
+                txt_label = f"CVM_{cvm_cnt}"
+            elif isinstance(model, CAModel):
+                cam_cnt += 1
+                txt_label = f"CAM_{cam_cnt}"
+            else:
+                txt_label = "N/A"
 
-                attrs["txt_label"] = txt_label
-            except KeyError:
-                pass
+            self.txt_labels[i] = txt_label
 
     def __getitem__(self, key):
-        return self.G.nodes[key]["kf"]
+        return self.kfs[key]
 
     def __setitem__(self, key, val):
         try:
             # val = (kf, label)
-            self.G.nodes[key]["kf"] = val[0]
-            self.G.nodes[key]["nbhood"] = val[0]
-            self.G.nodes[key]["txt_label"] = val[1]
+            self.kfs[key] = val[0]
+            self.txt_labels[key] = val[1]
         except:
             # val = kf
-            self.G.nodes[key]["kf"] = val
-            self.G.nodes[key]["nbhood"] = val
-        self._node_set.add(key)
-
-        if self._is_fully_init():
-            self._init_nbhood()
+            self.kfs[key] = val
 
     def __iter__(self):
         # Iterate through assigned nodes
-        return (kf for _, kf in self.G.nodes(data="kf") if kf is not None)
+        return (kf for kf in self.kfs if kf is not None)
 
     def draw_network(self, node_size=1000, figsize=(10, 7)):
         # TODO Distinct colors for RWM/CVM/CAM?
@@ -232,25 +227,27 @@ class KFNet:
         figsize: tuple (int, int), default (10, 7)
             Figure size (for pyplot)
         """
+        G = nx.from_numpy_array(self.adj_mat - np.eye(self.nnodes, dtype=np.int))
+
         in_nodes = []
         out_nodes = []
         node_labels = {}
-        for node, attrs in self.G.nodes(data=True):
-            if ("kf" in attrs) and (attrs["kf"] is not None):
-                in_nodes.append(node)
+        for i, kf in enumerate(self.kfs):
+            if kf is not None:
+                in_nodes.append(i)
             else:
-                out_nodes.append(node)
+                out_nodes.append(i)
 
-            node_lbl = str(node)
-            if ("txt_label" in attrs) and (attrs["txt_label"] is not None):
-                node_lbl += ":" + attrs["txt_label"]
-            node_labels[node] = node_lbl
+            node_lbl = str(i)
+            if self.txt_labels[i] is not None:
+                node_lbl += ":" + self.txt_labels[i]
+            node_labels[i] = node_lbl
 
-        # pos = nx.circular_layout(self.G)
         plt.figure(figsize=figsize)
-        pos = nx.spring_layout(self.G)
+        # pos = nx.circular_layout(G)
+        pos = nx.spring_layout(G)
         nx.draw_networkx_nodes(
-            self.G,
+            G,
             pos=pos,
             nodelist=in_nodes,
             node_size=node_size,
@@ -258,7 +255,7 @@ class KFNet:
             label="Initialized",
         )
         nx.draw_networkx_nodes(
-            self.G,
+            G,
             pos=pos,
             nodelist=out_nodes,
             node_size=node_size,
@@ -266,34 +263,14 @@ class KFNet:
             label="Uninitialized",
         )
         nx.draw_networkx_labels(
-            self.G, pos=pos, labels=node_labels, font_size=12, font_weight="bold",
+            G, pos=pos, labels=node_labels, font_size=12, font_weight="bold",
         )
-        nx.draw_networkx_edges(self.G, pos=pos, alpha=0.6)
+        nx.draw_networkx_edges(G, pos=pos, alpha=0.6)
 
         plt.axis("off")
         plt.tight_layout()
         plt.legend(scatterpoints=1)
         plt.show()
-
-    def _init_nbhood(self):
-        # Default weights, if they are not provided
-        if self.w_adapt is None:
-            self.w_adapt = np.ones((self.G.order(), self.G.order()))
-
-        if self.w_combine is None:
-            self.w_combine = np.ones((self.G.order(), self.G.order()))
-
-        for node, attrs in self.G.nodes(data=True):
-            w_adapt = [self.w_adapt[node, node]]
-            w_combine = [self.w_combine[node, node]]
-            for neighbor in self.G.neighbors(node):
-                # "self" was added in initialization stage
-                attrs["nbhood"].append(self.G.nodes[neighbor]["kf"])
-                # Init weights from matrices
-                w_adapt.append(self.w_adapt[node, neighbor])
-                w_combine.append(self.w_combine[node, neighbor])
-            attrs["w_adapt"] = w_adapt
-            attrs["w_combine"] = w_combine
 
     def predict(self, u=None):
         """ Run KalmanFilter predict step on all nodes.
@@ -304,7 +281,7 @@ class KFNet:
             Optional control vector
         """
         if self._is_fully_init():
-            for _, kf in self.G.nodes(data="kf"):
+            for kf in self.kfs:
                 kf.predict(u=u)
         else:
             self._print_uninitialized()
@@ -320,29 +297,37 @@ class KFNet:
         if self._is_fully_init():
             # TODO Missing observations?
             if y.ndim == 2:
-                # The same observation for all nodes
-                for yi, (node, kf) in zip(y, self.G.nodes(data="kf")):
-                    kf.update(y=yi, w=self.w_adapt[node, node])
-            else:
                 # Different observation for each node
-                for node, kf in self.G.nodes(data="kf"):
-                    kf.update(y=y, w=self.w_adapt[node, node])
+                for yi, i in zip(y, range(self.nnodes)):
+                    self.kfs[i].update(y=yi, w=self.w_adapt[i, i])
+            else:
+                # The same observation for all nodes
+                for i in range(self.nnodes):
+                    self.kfs[i].update(y=y, w=self.w_adapt[i, i])
         else:
             self._print_uninitialized()
 
     def adapt(self):
-        """ Adaptation step - incorporates observations from neighbor nodes
+        """ Adaptation phase - incorporates observations from neighbor nodes
         using update().
         """
         if self._is_fully_init():
-            for _, attrs in self.G.nodes(data=True):
-                kf = attrs["kf"]
-                nbhood = attrs["nbhood"]
-                nbh_obs = attrs["nbh_obs"] = self._get_nbh_observations(nbhood[1:])
-                w_adapt = attrs["w_adapt"][1:]
+            for i in range(self.nnodes):
+                kf = self.kfs[i]
+
+                # Get neighbor node indices
+                # Exclude current node from nbh
+                # Get references to KalmanFilter objects
+                # Get neighborhood observations
+                # Get adaptation phase weights
+                nbh_indices = self.adj_mat[i].nonzero()[0]
+                nbh_indices = nbh_indices[nbh_indices != i]
+                nbh = [self.kfs[j] for j in nbh_indices]
+                nbh_obs = self._get_nbh_observations(nbh)
+                weights = self.w_adapt[i, nbh_indices]
 
                 y_tmp = kf.y
-                for (yi, Ri), w in zip(nbh_obs, w_adapt):
+                for (yi, Ri), w in zip(nbh_obs, weights):
                     # Technically, observation matrix H should be passed in as well
                     kf.update(y=yi, R=Ri, w=w)
 
@@ -353,8 +338,8 @@ class KFNet:
         else:
             self._print_uninitialized()
 
-    def combine(self, reset_strategy="mean", reset_thresh=None):
-        """ Combination step - combines estimates from neighbors using
+    def combine(self):
+        """ Combination phase - combines estimates from neighbors using
         covariance intersection algorithm.
 
         Parameters
@@ -369,40 +354,33 @@ class KFNet:
         """
         if self._is_fully_init():
             # Get neighborhood estimates
-            for _, attrs in self.G.nodes(data=True):
-                kf = attrs["kf"]
-                nbhood = attrs["nbhood"]
-                nbh_w = attrs["w_combine"]
+            weights = []
+            for i in range(self.nnodes):
+                kf = self.kfs[i]
+                nbh_indices = self.adj_mat[i].nonzero()[0]
+                nbh = [self.kfs[j] for j in nbh_indices]
+                wi = self.w_combine[i, nbh_indices]
 
                 # Only use estimates from models of the same complexity or better
                 # Also need to obtain the correct weights
-                attrs["nbh_est"], attrs["w_combine"] = self._get_nbh_estimates(
-                    kf, nbhood, nbh_w
-                )
-                if reset_strategy is not None:
-                    self._check_reset_cond(
-                        kf,
-                        attrs["nbh_est"],
-                        attrs["w_combine"],
-                        reset_strategy,
-                        reset_thresh,
-                    )
+                self.nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
+                weights.append(wi)
 
             # Combine estimates using covariance intersection
-            for _, attrs in self.G.nodes(data=True):
-                kf = attrs["kf"]
-                nbh_est = attrs["nbh_est"]
-                w_combine = attrs["w_combine"]
+            for i in range(self.nnodes):
+                kf = self.kfs[i]
+                nbh_est = self.nbh_est[i]
+                wi = weights[i]
 
                 # Unzip into array of estimates and array of cov. matrices
                 xi_arr, Pi_arr = zip(*nbh_est)
-                ci_est = self._cov_intersect(xi_arr, Pi_arr, w_combine)
+                ci_est = self._cov_intersect(xi_arr, Pi_arr, wi)
                 kf.set_estimate(*ci_est)
         else:
             self._print_uninitialized()
 
     def log(self):
-        for _, kf in self.G.nodes(data="kf"):
+        for kf in self.kfs:
             kf._log()
 
     def time_step(
@@ -443,6 +421,8 @@ class KFNet:
             Maximum accepted distance from the centroid before the filter reset
         """
         if self._is_fully_init():
+            if reset_strategy is not None:
+                self.reset_filters(reset_strategy, reset_thresh)
             if predict:
                 self.predict()
             if y is not None:
@@ -451,40 +431,35 @@ class KFNet:
                 if update and adapt:
                     self.adapt()
             if combine:
-                self.combine(reset_strategy, reset_thresh)
+                self.combine()
             self.log()
         else:
             self._print_uninitialized()
 
     def _is_fully_init(self):
-        return len(self._node_set) == self.G.order()
+        return not None in self.kfs
 
     def _print_uninitialized(self):
-        uninitialized = [n for n, d in self.G.nodes(data="kf") if d is None]
+        uninitialized = [n for n in range(self.nnodes) if self.kfs[n] is None]
         raise RuntimeError(f"Nodes {uninitialized} are uninitialized")
 
     def reset_filters(self, reset_strategy, reset_thresh):
         """
         """
         if self._is_fully_init():
-            # Get neighborhood estimates
-            for _, attrs in self.G.nodes(data=True):
-                kf = attrs["kf"]
-                nbhood = attrs["nbhood"]
-                nbh_w = attrs["w_combine"]
+            for i in range(self.nnodes):
+                kf = self.kfs[i]
+                nbh_indices = self.adj_mat[i].nonzero()[0]
+                nbh_indices = nbh_indices[nbh_indices != i]
+                nbh = [self.kfs[j] for j in nbh_indices]
+                wi = self.w_combine[i, nbh_indices]
 
                 # Only use estimates from models of the same complexity or better
                 # Also need to obtain the correct weights
-                attrs["nbh_est"], attrs["w_combine"] = self._get_nbh_estimates(
-                    kf, nbhood, nbh_w
-                )
+                self.nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
                 if reset_strategy is not None:
                     self._check_reset_cond(
-                        kf,
-                        attrs["nbh_est"],
-                        attrs["w_combine"],
-                        reset_strategy,
-                        reset_thresh,
+                        kf, self.nbh_est[i], wi, reset_strategy, reset_thresh,
                     )
         else:
             self._print_uninitialized()
@@ -494,17 +469,17 @@ class KFNet:
         if not isinstance(reset_thresh, (float, int)):
             raise TypeError(f"Number expected, got {type(reset_thresh)}")
 
-        if len(nbh_est) < 3:
+        if len(nbh_est) < 2:
             return
 
         if reset_strategy == "mean":
-            # Centoid as arithmetic mean of estiamtes
+            # Centroid as arithmetic mean of estiamtes
             # TODO weights?
-            ctr = np.asarray([x for (x, P) in nbh_est[1:]]).mean(axis=0)
+            ctr = np.asarray([x for (x, P) in nbh_est]).mean(axis=0)
         elif reset_strategy == "ci":
             # Centoid calculated using covariance intersection
-            xi_arr, Pi_arr = zip(*nbh_est[1:])
-            ctr, _ = KFNet._cov_intersect(xi_arr, Pi_arr, nbh_w[1:])
+            xi_arr, Pi_arr = zip(*nbh_est)
+            ctr, _ = KFNet._cov_intersect(xi_arr, Pi_arr, nbh_w)
         else:
             raise ValueError(f"Invalid reset_strategy: {reset_strategy}")
 
@@ -512,9 +487,9 @@ class KFNet:
 
         obs, _ = kf.get_observation()
         try:
-            nbdim_obs = obs.shape[0]
-            dist_ctr_obs = np.linalg.norm(obs - ctr[:nbdim_obs])
-        except TypeError:
+            ndim_obs = obs.shape[0]
+            dist_ctr_obs = np.linalg.norm(obs - ctr[:ndim_obs])
+        except (TypeError, AttributeError):
             # No observation is available
             pass
 
@@ -646,15 +621,12 @@ class KFNet:
         """ Set weight matrix for adapt step.
         """
         if (w_adapt is not None) and (
-            np.asarray(w_adapt).shape != (self.G.order(), self.G.order())
+            np.asarray(w_adapt).shape != (self.nnodes, self.nnodes)
         ):
             raise ValueError(
-                f"Weight matrix of shape {self.G.order(), self.G.order()} expected."
+                f"Weight matrix of shape {self.nnodes, self.nnodes} expected."
             )
         self._w_adapt = w_adapt
-
-        if self._is_fully_init():
-            self._init_nbhood()
 
     @property
     def w_combine(self):
@@ -667,22 +639,9 @@ class KFNet:
         """ Set weight matrix for combine step.
         """
         if (w_combine is not None) and (
-            np.asarray(w_combine).shape != (self.G.order(), self.G.order())
+            np.asarray(w_combine).shape != (self.nnodes, self.nnodes)
         ):
             raise ValueError(
-                f"Weight matrix of shape {self.G.order(), self.G.order()} expected."
+                f"Weight matrix of shape {self.nnodes, self.nnodes} expected."
             )
         self._w_combine = w_combine
-
-        if self._is_fully_init():
-            self._init_nbhood()
-
-    def print_node_attr(self, attr="all", node="all"):
-        if node == "all":
-            for n in self.G.nodes(data=True if attr == "all" else attr):
-                print(n)
-        else:
-            if attr == "all":
-                print(self.G.nodes[node])
-            else:
-                print(self.G.nodes[node][attr])
