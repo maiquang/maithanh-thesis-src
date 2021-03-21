@@ -38,7 +38,7 @@ class Trajectory:
     """
 
     def __init__(
-        self, model, n_steps, n_obs=1, init_state=None, random_seed=None, u=None
+        self, model, n_steps, init_state=None, R=None, random_seed=None, u=None
     ):
         """Initialize trajectory simulator and simulate n_steps.
 
@@ -48,10 +48,10 @@ class Trajectory:
             State-space representation model
         n_steps : int
             Number of simulation steps
-        n_obs : int
-            Number of distinct observations in each step
         init_state : np.array, optional
             Initial state vector at t=0, default is a zero vector
+        R :
+
         random_seed : int, optional
             Random seed for PRNG initialization
         u : np.array, optional
@@ -65,9 +65,9 @@ class Trajectory:
         if init_state is None:
             init_state = np.zeros(self.model.A.shape[0], dtype=np.float64)
 
-        self.X, self.Y = self.simulate(n_steps, n_obs, init_state, random_seed, u)
+        self.X, self.Y = self.simulate(n_steps, init_state, R, u, random_seed)
 
-    def simulate(self, n_steps, n_obs=1, init_state=None, random_seed=None, u=None):
+    def simulate(self, n_steps, init_state=None, R=None, u=None, random_seed=None):
         """ Simulate trajectory.
 
         Parameters
@@ -96,19 +96,33 @@ class Trajectory:
         if random_seed is not None:
             np.random.seed(random_seed)
 
-        X = np.zeros(shape=(n_steps, self.model.A.shape[0]))
-        Y = np.zeros(shape=(n_steps, n_obs, self.model.H.shape[0]))
+        if R is None:
+            R = self.model.R
 
+        if R.ndim == 1:
+            # List of scalars
+            R = np.atleast_3d(R)
+        elif R.ndim == 2:
+            # One matrix
+            R = R[np.newaxis, :]
+
+        X = np.zeros(shape=(n_steps, self.model.A.shape[0]))
+        Y = np.zeros(shape=(n_steps, R.shape[0], self.model.H.shape[0]))
+
+        # Generate true states
         x = init_state
         for t in range(n_steps):
             x = self.model.A.dot(x) + mvn.rvs(cov=self.model.Q)
             if self.model.B is not None and u is not None:
                 x += self.model.B.dot(u)
-
-            y = self.model.H.dot(x) + mvn.rvs(cov=self.model.R, size=n_obs)
-
             X[t, :] = x
-            Y[t, :] = y
+
+        # Add observation noise
+        for i, r in enumerate(R):
+            # y = Hx + obs.noise
+            Y[:, i] = np.einsum("ij, kj -> ki", self.model.H, X) + mvn.rvs(
+                cov=r, size=n_steps
+            )
 
         return X, np.squeeze(Y)
 

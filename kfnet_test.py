@@ -19,11 +19,17 @@ if __name__ == "__main__":
         KalmanFilter(RWModel(c_rwm * q, r), lambda_expf=expf),
         KalmanFilter(CVModel(q, r)),
         KalmanFilter(CAModel(q, r)),
+        KalmanFilter(CAModel(q, r)),
+        KalmanFilter(CAModel(q, r)),
+        KalmanFilter(CAModel(q, r)),
     ]
 
-    kfs_dict = {idx: kf for idx, kf in enumerate(kfs)}
-    labels = ["RWM_1", "CVM_1", "CAM_1"]
+    # kfs_dict = {idx: kf for idx, kf in enumerate(kfs)}
+    # labels = ["RWM_1", "CVM_1", "CAM_1"]
 
-    kfn = KFNet(5, 3, init=kfs_dict, txt_labels=labels)
+    G = np.eye(6)
+    kfn = KFNet(6, 3, G=G, init=kfs)
 
+    print(kfn.adj_mat)
+    kfn.generate_txt_labels()
     kfn.draw_network()

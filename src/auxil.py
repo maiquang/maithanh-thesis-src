@@ -25,7 +25,7 @@ def rmse(y, x, n):
         x = np.expand_dims(x, 1)
 
     t = np.arange(1, n + 1)
-    return np.sqrt(((y[:n] - x[:n]) ** 2).cumsum(axis=0) / t.reshape(n, 1))
+    return np.sqrt(((y[:n] - x[:n]) ** 2).cumsum(axis=0) / t[:, np.newaxis])
 
 
 def plot_traj(traj, obs=None, kf=None):

@@ -54,7 +54,7 @@ class StateSpace:
         self.Q = Q
 
         self.H = np.atleast_2d(H)
-        self.R = R
+        self.R = np.atleast_2d(R)
 
 
 class RWModel(StateSpace):

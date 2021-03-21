@@ -29,13 +29,20 @@ class KFNet:
         Combination weights matrix
     random_seed : int, optional
         Random seed for the graph generator
-    G : networkx.Graph
-        A custom networkx.Graph to be used
+    G : networkx.Graph, np.array
+        A custom graph or an adjacency matrix
 
     Attributes
     ----------
-    G : networkx.Graph
-        Underlying network.G graph represeting the network topology
+    adj_mat :
+
+    nnodes :
+
+    kfs :
+
+    w_adapt :
+
+    w_combine :
 
     Methods
     -------
@@ -45,14 +52,14 @@ class KFNet:
         Generate text labels for nodes based on their motion model.
     draw_network(self, node_size, figsize)
         Draw network.
-    predict()
+    predict(u)
         Run KalmanFilter predict step on all nodes.
     update(y)
         Run KalmanFilter update step on all nodes.
     adapt()
         Adaptation step - incorporates observations from neighbor nodes
         using update().
-    combine(reset_strategy, reset_thresh)
+    combine()
         Combination step - combines estimates from neighbors using
         covariance intersection algorithm.
     time_step(predict, update, adapt, combine, reset_strategy, reset_thresh=5.0)
@@ -91,8 +98,8 @@ class KFNet:
             Combination weights matrix
         random_seed : int, optional
             Random seed for the graph generator
-        G : networkx.Graph
-            A custom networkx.Graph to be used
+        G : networkx.Graph, np.array
+            A custom graph or an adjacency matrix
         """
         if G is None:
             while True:
@@ -101,18 +108,32 @@ class KFNet:
                 )
                 if nx.is_connected(G):
                     break
+            self.nnodes = G.order()
+            self.adj_mat = nx.to_numpy_array(
+                G, nodelist=sorted(G.nodes), dtype=np.int
+            ) + np.eye(self.nnodes, dtype=np.int)
         else:
-            if not isinstance(G, nx.Graph):
-                raise TypeError(f"G must be a networkX.Graph object, got {type(G)}.")
-
-        self.nnodes = G.order()
-        self.adj_mat = nx.to_numpy_array(
-            G, nodelist=sorted(G.nodes), dtype=np.int
-        ) + np.eye(self.nnodes, dtype=np.int)
+            try:
+                # networkx Graph
+                self.nnodes = G.order()
+                self.adj_mat = nx.to_numpy_array(
+                    G, nodelist=sorted(G.nodes), dtype=np.int
+                ) + np.eye(self.nnodes, dtype=np.int)
+            except AttributeError:
+                # Adjacency matrix
+                self.adj_mat = np.asarray(G) + np.eye(
+                    np.asarray(G).shape[0], dtype=np.int
+                )
+                self.nnodes = self.adj_mat.shape[0]
+            except:
+                print(
+                    f"G must be a networkX.Graph object or an ajacency matrix, got {type(G)}."
+                )
+                raise
 
         self.kfs = [None] * self.nnodes
-        self.txt_labels = [None] * self.nnodes
-        self.nbh_est = [None] * self.nnodes
+        self._txt_labels = [None] * self.nnodes
+        self._nbh_est = [None] * self.nnodes
 
         # Initialize adaptation and combination weight matrices
         self.w_adapt = np.ones_like(self.adj_mat) if w_adapt is None else w_adapt
@@ -160,13 +181,13 @@ class KFNet:
                 # Dict initilization
                 for idx, lbl in txt_labels.items():
                     try:
-                        self.txt_labels[idx] = lbl
+                        self._txt_labels[idx] = lbl
                     except IndexError:
                         continue
             except AttributeError:
                 # List initialization
                 n = self.nnodes if self.nnodes <= len(txt_labels) else len(txt_labels)
-                self.txt_labels = txt_labels[:n]
+                self._txt_labels[:n] = txt_labels[:n]
             except KeyError:
                 pass  # Some node n not in G could be fine
             except:
@@ -198,7 +219,7 @@ class KFNet:
             else:
                 txt_label = "N/A"
 
-            self.txt_labels[i] = txt_label
+            self._txt_labels[i] = txt_label
 
     def __getitem__(self, key):
         return self.kfs[key]
@@ -207,7 +228,7 @@ class KFNet:
         try:
             # val = (kf, label)
             self.kfs[key] = val[0]
-            self.txt_labels[key] = val[1]
+            self._txt_labels[key] = val[1]
         except:
             # val = kf
             self.kfs[key] = val
@@ -239,8 +260,8 @@ class KFNet:
                 out_nodes.append(i)
 
             node_lbl = str(i)
-            if self.txt_labels[i] is not None:
-                node_lbl += ":" + self.txt_labels[i]
+            if self._txt_labels[i] is not None:
+                node_lbl += ":" + self._txt_labels[i]
             node_labels[i] = node_lbl
 
         plt.figure(figsize=figsize)
@@ -324,12 +345,12 @@ class KFNet:
                 nbh_indices = nbh_indices[nbh_indices != i]
                 nbh = [self.kfs[j] for j in nbh_indices]
                 nbh_obs = self._get_nbh_observations(nbh)
-                weights = self.w_adapt[i, nbh_indices]
+                weights_a = self.w_adapt[i, nbh_indices]
 
                 y_tmp = kf.y
-                for (yi, Ri), w in zip(nbh_obs, weights):
+                for (yi, Ri), wi in zip(nbh_obs, weights_a):
                     # Technically, observation matrix H should be passed in as well
-                    kf.update(y=yi, R=Ri, w=w)
+                    kf.update(y=yi, R=Ri, w=wi)
 
                 # update() saves latest observation
                 # restore node's original observation
@@ -341,20 +362,10 @@ class KFNet:
     def combine(self):
         """ Combination phase - combines estimates from neighbors using
         covariance intersection algorithm.
-
-        Parameters
-        ----------
-        reset_strategy : [None, "mean", "ci"]
-            "mean": centroid is calculated as the uniformly weighted
-                arithmetic mean of neighbor estimates
-            "ci": centroid is calculated as covariance intersection
-                of neighbor estimates (i. e., "uncertainty weighted")
-        reset_threshold : float
-            Maximum accepted distance from the centroid before the filter reset
         """
         if self._is_fully_init():
             # Get neighborhood estimates
-            weights = []
+            weights_c = []
             for i in range(self.nnodes):
                 kf = self.kfs[i]
                 nbh_indices = self.adj_mat[i].nonzero()[0]
@@ -363,14 +374,16 @@ class KFNet:
 
                 # Only use estimates from models of the same complexity or better
                 # Also need to obtain the correct weights
-                self.nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
-                weights.append(wi)
+                self._nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
+                weights_c.append(wi)
+
+            # Resetting here works, but gives worse estimates
 
             # Combine estimates using covariance intersection
             for i in range(self.nnodes):
                 kf = self.kfs[i]
-                nbh_est = self.nbh_est[i]
-                wi = weights[i]
+                nbh_est = self._nbh_est[i]
+                wi = weights_c[i]
 
                 # Unzip into array of estimates and array of cov. matrices
                 xi_arr, Pi_arr = zip(*nbh_est)
@@ -392,6 +405,7 @@ class KFNet:
         combine=True,
         reset_strategy="mean",
         reset_thresh=5.0,
+        c=1.0,
     ):
         """ Runs one iteration of diffusion Kalman filtering
         using adapt-then-combine strategy.
@@ -417,12 +431,14 @@ class KFNet:
                 arithmetic mean of neighbor estimates
             "ci": centroid is calculated as covariance intersection
                 of neighbor estimates (i. e., "uncertainty weighted")
-        reset_threshold : float
+        reset_threshold : float, default 5.0
             Maximum accepted distance from the centroid before the filter reset
+        c : float, default 1.0
+            TODO
         """
         if self._is_fully_init():
             if reset_strategy is not None:
-                self.reset_filters(reset_strategy, reset_thresh)
+                self.reset_filters(reset_strategy, reset_thresh, c)
             if predict:
                 self.predict()
             if y is not None:
@@ -443,8 +459,30 @@ class KFNet:
         uninitialized = [n for n in range(self.nnodes) if self.kfs[n] is None]
         raise RuntimeError(f"Nodes {uninitialized} are uninitialized")
 
-    def reset_filters(self, reset_strategy, reset_thresh):
+    def observation_covs(self):
         """
+        Return observation noise covariance matrices.
+
+        Returns
+        -------
+        Array of observation noise covariance matrices.
+        """
+        return np.array([kf.model.R for kf in self.kfs])
+
+    def reset_filters(self, reset_strategy, reset_thresh, c=1.0):
+        """
+
+        Parameters
+        ----------
+        reset_strategy : [None, "mean", "ci"]
+            "mean": centroid is calculated as the uniformly weighted
+                arithmetic mean of neighbor estimates
+            "ci": centroid is calculated as covariance intersection
+                of neighbor estimates (i. e., "uncertainty weighted")
+        reset_threshold : float
+            Maximum accepted distance from the centroid before the filter reset
+        c : float, default 1.0
+
         """
         if self._is_fully_init():
             for i in range(self.nnodes):
@@ -456,16 +494,16 @@ class KFNet:
 
                 # Only use estimates from models of the same complexity or better
                 # Also need to obtain the correct weights
-                self.nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
+                self._nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
                 if reset_strategy is not None:
                     self._check_reset_cond(
-                        kf, self.nbh_est[i], wi, reset_strategy, reset_thresh,
+                        kf, self._nbh_est[i], wi, reset_strategy, reset_thresh, c
                     )
         else:
             self._print_uninitialized()
 
     @staticmethod
-    def _check_reset_cond(kf, nbh_est, nbh_w, reset_strategy, reset_thresh):
+    def _check_reset_cond(kf, nbh_est, nbh_w, reset_strategy, reset_thresh, c):
         if not isinstance(reset_thresh, (float, int)):
             raise TypeError(f"Number expected, got {type(reset_thresh)}")
 
@@ -475,9 +513,9 @@ class KFNet:
         if reset_strategy == "mean":
             # Centroid as arithmetic mean of estiamtes
             # TODO weights?
-            ctr = np.asarray([x for (x, P) in nbh_est]).mean(axis=0)
+            ctr = np.asarray([x for (x, _) in nbh_est]).mean(axis=0)
         elif reset_strategy == "ci":
-            # Centoid calculated using covariance intersection
+            # Centroid calculated using covariance intersection
             xi_arr, Pi_arr = zip(*nbh_est)
             ctr, _ = KFNet._cov_intersect(xi_arr, Pi_arr, nbh_w)
         else:
@@ -503,12 +541,17 @@ class KFNet:
                 # No observation is available
                 xnew = ctr
 
+            # P = c^(# of resets) * P0
+            Pnew = (c ** len(kf._reset_log)) * kf._P0
+            kf.reset_filter(xnew, Pnew)
+
             # Update estimate in nbh_est array
-            kf.reset_filter(xnew)
-            nbh_est[0] = kf.get_estimate()
+            # Was needed when resetting between _get_nbh_estimates
+            # and cov. intersection
+            # nbh_est[0] = kf.get_estimate()
 
     @staticmethod
-    def _get_nbh_estimates(kf, nbhood, nbh_w, indices=None):
+    def _get_nbh_estimates(kf, nbh, nbh_w, indices=None):
         """ Get estimates from agents in neighborhood. This method should be
         called after predict() and update() but before combine().
 
@@ -516,7 +559,7 @@ class KFNet:
         ----------
         kf : KalmanFilter object
             KalmanFilter estimator
-        nbhood :
+        nbh :
 
         indices : list-of-lists/arrays, optional
             A list, the size of neighborhood, of indices of variables over
@@ -527,37 +570,37 @@ class KFNet:
         """
         if not indices:
             # Default case
-            indices = [None for i in range(len(nbhood))]
+            indices = [None for i in range(len(nbh))]
 
-        nbh_ests = []
+        nbh_est = []
         weights = []
-        for nbh, i, w in zip(nbhood, indices, nbh_w):
+        for nbh, i, w in zip(nbh, indices, nbh_w):
             # Only consider estimates from models with the same/higher complexity
             if nbh._ndim >= kf._ndim:
                 # i is usually None -> select first _ndim variables
-                nbh_ests.append(
+                nbh_est.append(
                     nbh.get_estimate(
                         indices=np.arange(kf._ndim, dtype=np.int) if not i else i
                     )
                 )
                 weights.append(w)
 
-        return nbh_ests, weights
+        return nbh_est, weights
 
     @staticmethod
-    def _get_nbh_observations(nbhood):
+    def _get_nbh_observations(nbh):
         """ Get latest observations from agents in neighborhood.
 
         Parameters
         ----------
-        nbhood : list
+        nbh : list
             List of references to KalmanFilter objects
 
         Returns
         -------
-            List of observations from nbhood
+            List of observations from nbh
         """
-        return [kf.get_observation() for kf in nbhood]
+        return [kf.get_observation() for kf in nbh]
 
     @staticmethod
     def _cov_intersect(xi_arr, Pi_arr, weights=None, normalize=True):
