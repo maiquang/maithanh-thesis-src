@@ -30,6 +30,6 @@ if __name__ == "__main__":
     G = np.eye(6)
     kfn = KFNet(6, 3, G=G, init=kfs)
 
-    print(kfn.adj_mat)
+    print(kfn._adj_mat)
     kfn.generate_txt_labels()
     kfn.draw_network()

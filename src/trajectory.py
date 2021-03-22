@@ -133,3 +133,11 @@ class Trajectory:
     @property
     def observations(self):
         return self.Y
+
+    @states.setter
+    def states(self, data):
+        self.X = data
+
+    @observations.setter
+    def observations(self, data):
+        self.Y = data

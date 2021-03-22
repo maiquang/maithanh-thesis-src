@@ -109,22 +109,22 @@ class KFNet:
                 if nx.is_connected(G):
                     break
             self.nnodes = G.order()
-            self.adj_mat = nx.to_numpy_array(
+            self._adj_mat = nx.to_numpy_array(
                 G, nodelist=sorted(G.nodes), dtype=np.int
             ) + np.eye(self.nnodes, dtype=np.int)
         else:
             try:
                 # networkx Graph
                 self.nnodes = G.order()
-                self.adj_mat = nx.to_numpy_array(
+                self._adj_mat = nx.to_numpy_array(
                     G, nodelist=sorted(G.nodes), dtype=np.int
                 ) + np.eye(self.nnodes, dtype=np.int)
             except AttributeError:
                 # Adjacency matrix
-                self.adj_mat = np.asarray(G) + np.eye(
+                self._adj_mat = np.asarray(G) + np.eye(
                     np.asarray(G).shape[0], dtype=np.int
                 )
-                self.nnodes = self.adj_mat.shape[0]
+                self.nnodes = self._adj_mat.shape[0]
             except:
                 print(
                     f"G must be a networkX.Graph object or an ajacency matrix, got {type(G)}."
@@ -133,11 +133,13 @@ class KFNet:
 
         self.kfs = [None] * self.nnodes
         self._txt_labels = [None] * self.nnodes
+
+        self._weights_c = [None] * self.nnodes
         self._nbh_est = [None] * self.nnodes
 
         # Initialize adaptation and combination weight matrices
-        self.w_adapt = np.ones_like(self.adj_mat) if w_adapt is None else w_adapt
-        self.w_combine = np.ones_like(self.adj_mat) if w_combine is None else w_combine
+        self.w_adapt = np.ones_like(self._adj_mat) if w_adapt is None else w_adapt
+        self.w_combine = np.ones_like(self._adj_mat) if w_combine is None else w_combine
 
         self.assign(init, txt_labels)
 
@@ -248,7 +250,7 @@ class KFNet:
         figsize: tuple (int, int), default (10, 7)
             Figure size (for pyplot)
         """
-        G = nx.from_numpy_array(self.adj_mat - np.eye(self.nnodes, dtype=np.int))
+        G = nx.from_numpy_array(self._adj_mat - np.eye(self.nnodes, dtype=np.int))
 
         in_nodes = []
         out_nodes = []
@@ -341,7 +343,7 @@ class KFNet:
                 # Get references to KalmanFilter objects
                 # Get neighborhood observations
                 # Get adaptation phase weights
-                nbh_indices = self.adj_mat[i].nonzero()[0]
+                nbh_indices = self._adj_mat[i].nonzero()[0]
                 nbh_indices = nbh_indices[nbh_indices != i]
                 nbh = [self.kfs[j] for j in nbh_indices]
                 nbh_obs = self._get_nbh_observations(nbh)
@@ -364,26 +366,14 @@ class KFNet:
         covariance intersection algorithm.
         """
         if self._is_fully_init():
-            # Get neighborhood estimates
-            weights_c = []
-            for i in range(self.nnodes):
-                kf = self.kfs[i]
-                nbh_indices = self.adj_mat[i].nonzero()[0]
-                nbh = [self.kfs[j] for j in nbh_indices]
-                wi = self.w_combine[i, nbh_indices]
-
-                # Only use estimates from models of the same complexity or better
-                # Also need to obtain the correct weights
-                self._nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
-                weights_c.append(wi)
-
-            # Resetting here works, but gives worse estimates
+            # Get the most recent neighborhood estimates
+            self._update_nbh_estimates(incl_self=True)
 
             # Combine estimates using covariance intersection
             for i in range(self.nnodes):
                 kf = self.kfs[i]
                 nbh_est = self._nbh_est[i]
-                wi = weights_c[i]
+                wi = self._weights_c[i]
 
                 # Unzip into array of estimates and array of cov. matrices
                 xi_arr, Pi_arr = zip(*nbh_est)
@@ -437,16 +427,20 @@ class KFNet:
             TODO
         """
         if self._is_fully_init():
-            if reset_strategy is not None:
-                self.reset_filters(reset_strategy, reset_thresh, c)
             if predict:
                 self.predict()
+            if reset_strategy is not None:
+                self.reset_filters(reset_strategy, reset_thresh, c)
             if y is not None:
                 if update:
                     self.update(y)
+                # if reset_strategy is not None:
+                #     self.reset_filters(reset_strategy, reset_thresh, c)
                 if update and adapt:
                     self.adapt()
             if combine:
+                # if reset_strategy is not None:
+                #     self.reset_filters(reset_strategy, reset_thresh, c)
                 self.combine()
             self.log()
         else:
@@ -485,19 +479,17 @@ class KFNet:
 
         """
         if self._is_fully_init():
-            for i in range(self.nnodes):
-                kf = self.kfs[i]
-                nbh_indices = self.adj_mat[i].nonzero()[0]
-                nbh_indices = nbh_indices[nbh_indices != i]
-                nbh = [self.kfs[j] for j in nbh_indices]
-                wi = self.w_combine[i, nbh_indices]
-
-                # Only use estimates from models of the same complexity or better
-                # Also need to obtain the correct weights
-                self._nbh_est[i], wi = self._get_nbh_estimates(kf, nbh, wi)
-                if reset_strategy is not None:
+            if reset_strategy is not None:
+                # Get the most recent neighborhood estimates
+                self._update_nbh_estimates(incl_self=False)
+                for i in range(self.nnodes):
                     self._check_reset_cond(
-                        kf, self._nbh_est[i], wi, reset_strategy, reset_thresh, c
+                        self.kfs[i],
+                        self._nbh_est[i],
+                        self._weights_c[i],
+                        reset_strategy,
+                        reset_thresh,
+                        c,
                     )
         else:
             self._print_uninitialized()
@@ -545,10 +537,22 @@ class KFNet:
             Pnew = (c ** len(kf._reset_log)) * kf._P0
             kf.reset_filter(xnew, Pnew)
 
-            # Update estimate in nbh_est array
-            # Was needed when resetting between _get_nbh_estimates
-            # and cov. intersection
-            # nbh_est[0] = kf.get_estimate()
+    def _update_nbh_estimates(self, incl_self=True):
+        if self._is_fully_init():
+            for i in range(self.nnodes):
+                kf = self.kfs[i]
+                nbh_indices = self._adj_mat[i].nonzero()[0]
+                if incl_self is False:
+                    # Don't include self for resets
+                    nbh_indices = nbh_indices[nbh_indices != i]
+                nbh = [self.kfs[j] for j in nbh_indices]
+                wi = self.w_combine[i, nbh_indices]
+
+                # Only use estimates from models of the same complexity or better
+                # Also need to obtain the correct weights
+                self._nbh_est[i], self._weights_c[i] = self._get_nbh_estimates(
+                    kf, nbh, wi
+                )
 
     @staticmethod
     def _get_nbh_estimates(kf, nbh, nbh_w, indices=None):
@@ -688,3 +692,12 @@ class KFNet:
                 f"Weight matrix of shape {self.nnodes, self.nnodes} expected."
             )
         self._w_combine = w_combine
+
+    @property
+    def adj_mat(self):
+        return self._adj_mat - np.eye(self.nnodes)
+
+    @adj_mat.setter
+    def adj_mat(self, data):
+        self.nnodes = data.shape[0]
+        self._adj_mat = data + np.eye(data.shape[0], dtype=np.int)

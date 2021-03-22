@@ -97,13 +97,12 @@ class KalmanFilter:
         log : bool, default True
             Log the resulting state estimate
         """
-        xminus = self.model.A.dot(self.x)
-        if u is not None:
-            xminus += self.model.B.dot(u)
-
         if self.lambda_expf is not None:
             self.P *= 1 / self.lambda_expf
 
+        xminus = self.model.A.dot(self.x)
+        if u is not None:
+            xminus += self.model.B.dot(u)
         Pminus = self.model.A.dot(self.P).dot(self.model.A.T) + self.model.Q
 
         self.x = xminus
