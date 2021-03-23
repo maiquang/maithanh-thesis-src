@@ -517,8 +517,7 @@ class KFNet:
 
         obs, _ = kf.get_observation()
         try:
-            ndim_obs = obs.shape[0]
-            dist_ctr_obs = np.linalg.norm(obs - ctr[:ndim_obs])
+            dist_ctr_obs = np.linalg.norm(obs - kf.model.H.dot(ctr))
         except (TypeError, AttributeError):
             # No observation is available
             pass
@@ -526,7 +525,10 @@ class KFNet:
         if dist_x_ctr >= reset_thresh:
             try:
                 if dist_ctr_obs >= reset_thresh:
-                    xnew = obs
+                    # If est.ndim > obs.ndim
+                    # Works here, but generally probably won't work
+                    ctr[: obs.shape[0]] = obs
+                    xnew = ctr
                 else:
                     xnew = ctr
             except NameError:
