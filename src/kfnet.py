@@ -138,8 +138,16 @@ class KFNet:
         self._nbh_est = [None] * self.nnodes
 
         # Initialize adaptation and combination weight matrices
-        self.w_adapt = np.ones_like(self._adj_mat) if w_adapt is None else w_adapt
-        self.w_combine = np.ones_like(self._adj_mat) if w_combine is None else w_combine
+        self.w_adapt = (
+            np.ma.make_mask(self._adj_mat, copy=True).astype(np.float)
+            if w_adapt is None
+            else w_adapt
+        )
+        self.w_combine = (
+            np.ma.make_mask(self._adj_mat, copy=True).astype(np.float)
+            if w_combine is None
+            else w_combine
+        )
 
         self.assign(init, txt_labels)
 
@@ -697,9 +705,12 @@ class KFNet:
 
     @property
     def adj_mat(self):
+        # adj. matrix with zeros on diagonal
         return self._adj_mat - np.eye(self.nnodes)
 
     @adj_mat.setter
     def adj_mat(self, data):
         self.nnodes = data.shape[0]
+
+        # fill main diagonal
         self._adj_mat = data + np.eye(data.shape[0], dtype=np.int)

@@ -120,6 +120,8 @@ class KalmanFilter:
             Observation for this update
         R : np.array, optional
             Override observation noise matrix for this step
+        w : float
+            Measurement weight from the interval [0.0, 1.0]
         log : bool, default True
             Log the resulting state estimate
         """
@@ -134,16 +136,15 @@ class KalmanFilter:
         H = self.model.H
         PHT = self.P.dot(H.T)
         # K = PH'(HPH' + R)^-1
-        K = np.linalg.inv(H.dot(PHT) + R)
-        K = w * PHT.dot(K)
+        K = np.linalg.inv(w * H.dot(PHT) + R)
+        K = PHT.dot(K)
 
-        # x+ = x-  +K(y - Hx-)
+        # x+ = x- + K(y - Hx-)
         innov = y - H.dot(self.x)
         xplus = self.x + K.dot(innov)
 
-        # P+ = (I-KH)P-(I-KH)' + KRK'
-        # Should support non-optimal K
-        # P+ = (I-KH)P- is sometimes used in other implementations
+        # P+ = (I-KH)P- ~ used by most implementations
+        # P+ = (I-KH)P-(I-KH)' + KRK' ~ numericaaly more stable
         I_KH = self._I - K.dot(H)
         KRK = K.dot(R).dot(K.T)
         Pplus = I_KH.dot(self.P).dot(I_KH.T) + KRK
