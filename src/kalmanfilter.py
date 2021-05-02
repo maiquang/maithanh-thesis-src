@@ -193,7 +193,7 @@ class KalmanFilter:
         Returns
         -------
         y : np.array
-            Latest obtained observation from update()
+            Latest local observation from update()
         R : np.array
             Observation noise matrix
         """

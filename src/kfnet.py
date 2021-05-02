@@ -340,7 +340,7 @@ class KFNet:
 
     def adapt(self):
         """ Adaptation phase - incorporates observations from neighbor nodes
-        using update().
+        using update(), local observations are assumed to be incorporated in update().
         """
         if self._is_fully_init():
             for i in range(self.nnodes):
@@ -363,7 +363,7 @@ class KFNet:
                     kf.update(y=yi, R=Ri, w=wi)
 
                 # update() saves latest observation
-                # restore node's original observation
+                # restore node's local observation
                 kf.y = y_tmp
 
         else:
