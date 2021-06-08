@@ -9,3 +9,4 @@ dependencies:
   - jupyter
   - networkx
   - nb_conda_kernels
+  - pandas

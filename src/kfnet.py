@@ -275,8 +275,8 @@ class KFNet:
             node_labels[i] = node_lbl
 
         plt.figure(figsize=figsize)
-        # pos = nx.circular_layout(G)
-        pos = nx.spring_layout(G)
+        pos = nx.circular_layout(G)
+        # pos = nx.spring_layout(G)
         nx.draw_networkx_nodes(
             G,
             pos=pos,
