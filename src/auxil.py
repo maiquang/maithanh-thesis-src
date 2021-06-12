@@ -129,7 +129,7 @@ def plot_rmse(traj, *kfs, nvars="all", var_labels=None, kf_labels=None):
     plt.show()
 
 
-def plot_estimates(kf, traj, nvars="all", plt_std=True, labels=None):
+def plot_estimates(kf, traj, nvars="all", plot_std=True, labels=None):
     """ Plot the evolution of estimates from kf.
 
     Parameters
@@ -154,7 +154,7 @@ def plot_estimates(kf, traj, nvars="all", plt_std=True, labels=None):
         plt.subplot(nvars, 1, i + 1)
         plt.plot(traj.X[:, i], alpha=0.6, color="b")
         plt.plot(hist_est[:, i], ":", color="r")
-        if plt_std:
+        if plot_std:
             std = np.sqrt(hist_cov[:, i, i])
             upper = hist_est[:, i] + 3 * std
             lower = hist_est[:, i] - 3 * std

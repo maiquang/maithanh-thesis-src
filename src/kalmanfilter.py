@@ -1,4 +1,9 @@
 import numpy as np
+import pandas as pd
+
+from itertools import repeat, chain
+
+from pandas.core.arrays import boolean
 from .statespace import StateSpace
 
 
@@ -220,6 +225,41 @@ class KalmanFilter:
     def _log(self):
         self._history_est.append(self.x.copy())
         self._history_cov.append(self.P.copy())
+
+    def to_dataframe(self, traj):
+        """Generate a pandas DataFrame of past estimates.
+
+        Parameters
+        ----------
+        traj : Trajectory object
+            ...
+
+        Returns
+        -------
+        DataFrame
+            A pandas DataFrame containing past estimates and real states
+        """
+        # Get covariance and reset data
+        std = np.sqrt(np.diagonal(self.history_cov, axis1=1, axis2=2))
+        resets = np.zeros(len(self.history))
+        resets[self._reset_log] = 1
+
+        # Merge into one ndarray
+        data = np.hstack((self.history, std, traj.states, resets[:, np.newaxis]))
+
+        # Create column labels
+        cols = []
+        for i in range(1, self.history.shape[1] + 1):
+            cols.append(f"x{i}_est")
+
+        for i in range(1, self.history.shape[1] + 1):
+            cols.append(f"x{i}_std")
+
+        for i in range(1, traj.states.shape[1] + 1):
+            cols.append(f"x{i}_real")
+        cols.append("reset")
+
+        return pd.DataFrame(data=data, columns=cols)
 
     @property
     def history(self):
