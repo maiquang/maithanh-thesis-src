@@ -544,7 +544,7 @@ class KFNet:
                 xnew = ctr
 
             # P = c^(# of resets) * P0
-            Pnew = (c ** len(kf._reset_log)) * kf._P0
+            Pnew = ((1 / c) ** max(200, len(kf._reset_log))) * kf._P0
             kf.reset_filter(xnew, Pnew)
 
     def _update_nbh_estimates(self, incl_self=True):

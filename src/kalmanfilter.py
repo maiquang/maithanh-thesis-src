@@ -48,7 +48,7 @@ class KalmanFilter:
         Return the latest observation.
     """
 
-    def __init__(self, model, x0=None, P0=None, lambda_expf=None):
+    def __init__(self, model, x0=None, P0=None, lambda_expf=1.0):
         """ Initialize Kalman Filter.
 
         Parameters
@@ -65,9 +65,9 @@ class KalmanFilter:
         if not isinstance(model, StateSpace):
             raise TypeError(f"StateSpace object expected, got {type(model)}")
 
-        if lambda_expf is not None and (not (0 < lambda_expf < 1)):
+        if not (0 < lambda_expf <= 1.0):
             raise ValueError(
-                f"Exponential forgetting parameter lamba_expf is not from the interval (0, 1)."
+                f"Exponential forgetting parameter lamba_expf={lambda_expf} is not from the interval (0, 1]."
             )
 
         self.model = model
@@ -102,8 +102,7 @@ class KalmanFilter:
         log : bool, default True
             Log the resulting state estimate
         """
-        if self.lambda_expf is not None:
-            self.P *= 1 / self.lambda_expf
+        self.P *= 1 / self.lambda_expf
 
         xminus = self.model.A.dot(self.x)
         if u is not None:

@@ -183,3 +183,17 @@ def plot_estimates(kf, traj, nvars="all", plot_std=True, labels=None):
     plt.figlegend(["True value", "State estimate", "Filter reset"])
     plt.suptitle("Evolution of estimates")
     plt.show()
+
+
+def network_rmse(kfn, traj, n, nvars=2, *add):
+    rmse_list = []
+
+    for kf in kfn:
+        for c in rmse(traj.states[:n, :nvars], kf.history[:n, :nvars], n).T:
+            rmse_list.append(c)
+
+    for kf in add:
+        for c in rmse(traj.states[:n, :nvars], kf.history[:n, :nvars], n).T:
+            rmse_list.append(c)
+
+    return np.array(rmse_list).T
