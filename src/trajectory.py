@@ -106,6 +106,10 @@ class Trajectory:
             X[t, :] = x
 
         self.X = X
+        try:
+            del self.Y
+        except AttributeError:
+            pass
 
     def add_obs_noise(self, R=False, random_seed=None):
         """Add observation noise to the generated trajectory. Noise is

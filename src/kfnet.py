@@ -547,6 +547,8 @@ class KFNet:
             Pnew = ((1 / c) ** max(200, len(kf._reset_log))) * kf._P0
             kf.reset_filter(xnew, Pnew)
 
+            # kf.model.Q *= 1 / c
+
     def _update_nbh_estimates(self, incl_self=True):
         if self._is_fully_init():
             for i in range(self.nnodes):
