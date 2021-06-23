@@ -359,7 +359,6 @@ class KFNet:
 
                 y_tmp = kf.y
                 for (yi, Ri), wi in zip(nbh_obs, weights_a):
-                    # Technically, observation matrix H should be passed in as well
                     kf.update(y=yi, R=Ri, w=wi)
 
                 # update() saves latest observation
@@ -472,7 +471,7 @@ class KFNet:
         return np.array([kf.model.R for kf in self.kfs])
 
     def reset_filters(self, reset_strategy, reset_thresh, c=1.0):
-        """
+        """ Reset filters in case of node failure.
 
         Parameters
         ----------
@@ -553,7 +552,7 @@ class KFNet:
                 kf = self.kfs[i]
                 nbh_indices = self._adj_mat[i].nonzero()[0]
                 if incl_self is False:
-                    # Don't include self for resets
+                    # Don't include self for failure detection
                     nbh_indices = nbh_indices[nbh_indices != i]
                 nbh = [self.kfs[j] for j in nbh_indices]
                 wi = self.w_combine[i, nbh_indices]
