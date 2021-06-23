@@ -34,16 +34,16 @@ class KFNet:
 
     Attributes
     ----------
-    adj_mat :
-
-    nnodes :
-
-    kfs :
-
-    w_adapt :
-
-    w_combine :
-
+    adj_mat : 2D np.array
+        The network topology saved as an adjacency matrix
+    nnodes : int
+        Number of nodes (agents)
+    kfs : list
+        A list of initialized KalmanFilter objects
+    w_adapt : 2D np.array
+        Adaptation weights matrix
+    w_combine : 2D np.array
+        Combination weights matrix
     Methods
     -------
     assign(init=None, txt_labels=None)
@@ -432,7 +432,7 @@ class KFNet:
         reset_threshold : float, default 5.0
             Maximum accepted distance from the centroid before the filter reset
         c : float, default 1.0
-            TODO
+            From the interval [0, 1], controls covariance matrix scaling after reset.
         """
         if self._is_fully_init():
             if predict:
@@ -484,7 +484,7 @@ class KFNet:
         reset_threshold : float
             Maximum accepted distance from the centroid before the filter reset
         c : float, default 1.0
-
+            From the interval [0, 1], controls covariance matrix scaling after reset.
         """
         if self._is_fully_init():
             if reset_strategy is not None:
@@ -546,8 +546,6 @@ class KFNet:
             # P = c^(# of resets) * P0
             Pnew = ((1 / c) ** max(200, len(kf._reset_log))) * kf._P0
             kf.reset_filter(xnew, Pnew)
-
-            # kf.model.Q *= 1 / c
 
     def _update_nbh_estimates(self, incl_self=True):
         if self._is_fully_init():

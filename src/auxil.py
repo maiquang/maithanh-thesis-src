@@ -185,7 +185,19 @@ def plot_estimates(kf, traj, nvars="all", plot_std=True, labels=None):
     plt.show()
 
 
-def network_rmse(kfn, traj, n, nvars=2, *add):
+def rmse_avg(kfs, traj, n, nvars=2):
+    rmse_list = []
+
+    for var in range(nvars):
+        rmse_v = np.zeros((n, 1))
+        for kf in kfs:
+            rmse_v += rmse(traj.states[:n, var], kf.history[:n, var], n)
+        rmse_list.append(rmse_v / len(kfs))
+
+    return np.squeeze(np.array(rmse_list).T)
+
+
+def rmse_network(kfn, traj, n, nvars=2, *add):
     rmse_list = []
 
     for kf in kfn:

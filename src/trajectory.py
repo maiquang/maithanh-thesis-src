@@ -35,7 +35,7 @@ class Trajectory:
     Methods
     -------
     simulate(n_steps, init_state=None, random_seed=None, u=None)
-        Simulate trajectory.
+        Simulate a trajectory.
     add_obs_noise(R=False, random_seed=None)
         Add observation noise.
     """
