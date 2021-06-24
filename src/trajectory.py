@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from scipy.stats import multivariate_normal as mvn
 
 from .statespace import StateSpace
