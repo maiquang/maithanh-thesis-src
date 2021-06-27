@@ -186,6 +186,24 @@ def plot_estimates(kf, traj, nvars="all", plot_std=True, labels=None):
 
 
 def rmse_avg(kfs, traj, n, nvars=2):
+    """Calculate the average RMSE of the KalmanFilter objects in kfs.
+
+    Parameters
+    ----------
+    kfs : list of KalmanFilter objects
+        KalmanFilter objects over which to calculate the average RMSE
+    traj : a Trajectory object
+        Simulated trajectory.
+    n : int
+        Number of data samples
+    nvars : int, optional
+        How many variables to include in the RMSE calculation, by default 2.
+
+    Returns
+    -------
+    np.array of shape (n, nvars * len(kfs))
+        Calculated RMSE.
+    """
     rmse_list = []
 
     for var in range(nvars):
