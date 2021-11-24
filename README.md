@@ -26,13 +26,31 @@ The goal is to estimate the latent state <!-- $x_t$ --> <img style="transform: t
 </p>
 
 ## Kalman filter
-The Kalman filter is used to estimate the latent state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">. It does assume assume both the process noise <!-- $w_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=w_t"> and observation noise <!-- $v_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=v_t"> to mutually independent and zero-mean Gaussian. The filtration runs in two steps:
+The Kalman filter is used to estimate the latent state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">. It does assume assume both the process noise <!-- $w_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=w_t"> and observation noise <!-- $v_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=v_t"> to be mutually independent and zero-mean Gaussian. The filtration runs in two steps:
 - **prediction** - predicts the next state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t"> using the state evolution model above,
 - **update** - incorporates a new measurement (observation) <!-- $y_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=y_t"> into the estimate of the hidden state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">.
 
 ## Diffusion Kalman filter
+Assume Kalman filters connected into a **diffusion network**, in which the network nodes communicate only locally, i.e., only with their adjacent neighbors. Employing the adapt-then-combine (ATC) diffusion strategy, the filtering proceeds as follows:
+- **local prediction** - the traditional Kalman filter prediction step,
+- **adaptation** - incorporates its own and its neighbors' observations (e.g., sensor readings),
+- **combination** - create a new estimate by combining the neighbors' estimates (the estimates of <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t"> can be, for example, probability distributions).
 
 ## Partially heterogeneous models
+The state-of-the-art methods for distributed Kalman filtering mostly assume spatial homogeneity of the state-space models. This work focuses on partially heterogeneous models, where the state-space of the less complex (or underspecified) models is a subspace of more complex model state-space. The simulation examples are run using the
+1. Random-walk model (RWM)
+2. Constant velocity model (CVM)
+3. Constant acceleration model (CAM)
 
+The models ordered by complexity are:
+<!-- $$
+\text{RWM} \leq \text{CVM} \leq \text{CAM}.
+$$ -->
+
+<div align="center"><img style="background: white;" src="https://render.githubusercontent.com/render/math?math=%5Ctext%7BRWM%7D%20%5Cleq%20%5Ctext%7BCVM%7D%20%5Cleq%20%5Ctext%7BCAM%7D."></div>
+
+Naturally, in an isolated environment with no collaboration among the nodes, the estimation performance and stability of the more complex models is significantly better than that of the underspecified models. The goal is to improve the estimation performance and stability of the RWM model by collaboration among the nodes.
+
+The thesis proposes a modification to the existing diffusion Kalman filter. The local prediction and adaptation steps from the diffusion Kalman filter are preserved. The combination step is slightly modified, only estimates from neighbors of the same or better complexity are combined. In addition, a simple node failure detection method is proposed to further improve the performance of the underspecified models. Each node checks for inconsistency between its own estimate and the estimates of its neighbors (here Euclidean distance is used), when a failure is detected, the node is reset and reinitialized with a new estimate (in this case - an arithmetic mean of the neighbors' estimates).
 
 # Results
