@@ -96,4 +96,4 @@ The performance of the proposed diffusion filter is evaluated on the following s
   <center> <img src="./images/rwm_tr3.png"> </center>
 </p>
 
-The full results can be found in the [thesis text]((https://raw.githubusercontent.com/maiquang/maithanh-thesis-src/master/DP_Mai_Thanh_Quang_2021.pdf)) [Chap. 5].
+The full results can be found in the [thesis text](https://raw.githubusercontent.com/maiquang/maithanh-thesis-src/master/DP_Mai_Thanh_Quang_2021.pdf) [Chap. 5].
