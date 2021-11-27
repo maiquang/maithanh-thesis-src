@@ -26,7 +26,7 @@ The goal is to estimate the latent state <!-- $x_t$ --> <img style="transform: t
 </p>
 
 ## Kalman filter
-The Kalman filter is used to estimate the latent state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">. It does assume assume both the process noise <!-- $w_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=w_t"> and observation noise <!-- $v_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=v_t"> to be mutually independent and zero-mean Gaussian. The filtration runs in two steps:
+The Kalman filter is used to estimate the latent state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">. It does assume both the process noise <!-- $w_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=w_t"> and observation noise <!-- $v_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=v_t"> to be mutually independent and zero-mean Gaussian. The filtration runs in two steps:
 - **prediction** - predicts the next state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t"> using the state evolution model above,
 - **update** - incorporates a new measurement (observation) <!-- $y_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=y_t"> into the estimate of the hidden state <!-- $x_t$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_t">.
 
@@ -54,3 +54,46 @@ Naturally, in an isolated environment with no collaboration among the nodes, the
 The thesis proposes a modification to the existing diffusion Kalman filter. The local prediction and adaptation steps from the diffusion Kalman filter are preserved. The combination step is slightly modified, only estimates from neighbors of the same or better complexity are combined. In addition, a simple node failure detection method is proposed to further improve the performance of the underspecified models. Each node checks for inconsistency between its own estimate and the estimates of its neighbors (here Euclidean distance is used), when a failure is detected, the node is reset and reinitialized with a new estimate (in this case - an arithmetic mean of the neighbors' estimates).
 
 # Results
+The performance of the proposed diffusion filter is evaluated on the following simulation examples. The nodes of the diffusion network observe a noisy realization of a 2D trajectory. The data is simulated from the initial state <!-- $x_{0}  = \begin{bmatrix} 0 & 0 & 0 & 0 & 0 & 0 \end{bmatrix}^{\intercal}$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=x_%7B0%7D%20%20%3D%20%5Cbegin%7Bbmatrix%7D%200%20%26%200%20%26%200%20%26%200%20%26%200%20%26%200%20%5Cend%7Bbmatrix%7D%5E%7B%5Cintercal%7D"> using the CAM. While the observation noise is the same for all the nodes, each node receives a different set of measurements. The nodes employ one of these models - RWM, CVM, or CAM. The results are averaged over 100 independently simulated trajectories for <!-- $t = 1, 2, \ldots, 1000$ --> <img style="transform: translateY(0.1em); background: white;" src="https://render.githubusercontent.com/render/math?math=t%20%3D%201%2C%202%2C%20%5Cldots%2C%201000">. The simulations were run on a network with 15 nodes with 2 RWMs, 4 CVMs and 9 CAMs. In the first scenario, the models employed by each node are fixed between consecutive simulation runs, in the second scenario, the models are randomly assigned to the nodes in each simulation run. The strategies tested were (i) no cooperation, (ii) adapt-then-combine (ATC), and (iii) ATC + failure detection.
+
+## The network topology used in the simulation - 2 RWM nodes (red), 4 CVM nodes (blue) and 9 CAM nodes.
+<p>
+  <center> <img src="./images/topologie.png"> </center>
+</p>
+
+## An example of one simulated trajectory.
+<p>
+  <center> <img src="./images/traj.png"> </center>
+</p>
+
+## State and state estimate of a randomly selected run for a CAM trajectory
+<p>
+  <center> <img src="./images/gr3.png" width="650"> <img src="./images/gr4.png" width="650"> </center>
+</p>
+
+## No cooperation. Fixed initialization. Average RMSE of nodes employing the same model, averaged over 100 simulations.
+<p>
+  <center> <img src="./images/rmse_nc_x1.png"> </center>
+  <center> <img src="./images/rmse_nc_x2.png"> </center>
+</p>
+
+## ATC only. Fixed initialization. Average RMSE of nodes employing the same model, averaged over 100 simulations.
+<p>
+  <center> <img src="./images/rmse_atc_x1.png"> </center>
+  <center> <img src="./images/rmse_atc_x2.png"> </center>
+</p>
+
+## ATC + Failure detection. Fixed initialization. Average RMSE of nodes employing the same model, averaged over 100 simulations.
+<p>
+  <center> <img src="./images/rmse_atcr_x1.png"> </center>
+  <center> <img src="./images/rmse_atcr_x2.png"> </center>
+</p>
+
+## ATC + Failure detection. State and state estimate evolution for a randomly selected RWM node. Filter resets shown.
+<p>
+  <center> <img src="./images/rwm_tr1.png"> </center>
+  <center> <img src="./images/rwm_tr2.png"> </center>
+  <center> <img src="./images/rwm_tr3.png"> </center>
+</p>
+
+The full results can be found in the [thesis text]((https://raw.githubusercontent.com/maiquang/maithanh-thesis-src/master/DP_Mai_Thanh_Quang_2021.pdf)) [Chap. 5].
